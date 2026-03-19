@@ -1,0 +1,346 @@
+﻿<Window x:Class="MojaAplikacja.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="System"
+        Height="700"
+        Width="1250"
+        WindowStartupLocation="CenterScreen">
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <DockPanel Grid.Row="0" Margin="5">
+            <TextBlock Text="System RFID"
+                       FontWeight="Bold"
+                       VerticalAlignment="Center"
+                       Margin="5"/>
+
+            <Button Content="Zablokuj"
+                    DockPanel.Dock="Right"
+                    Padding="10,4"
+                    Margin="5"
+                    Click="LockButton_Click"/>
+        </DockPanel>
+
+        <TabControl x:Name="MainTabs" Grid.Row="1">
+
+            <TabItem Header="Skaner">
+                <Grid Margin="20">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Text="Przyłóż kartę do czytnika"
+                               FontSize="22"
+                               FontWeight="SemiBold"
+                               Margin="0,0,0,20" />
+
+                    <StackPanel Grid.Row="1"
+                                Orientation="Horizontal"
+                                Margin="0,0,0,20">
+                        <TextBlock Text="Odczyt karty:"
+                                   VerticalAlignment="Center"
+                                   Width="110" />
+
+                        <TextBox x:Name="CardInputTextBox"
+                                 Width="260"
+                                 Height="32"
+                                 FontSize="18"
+                                 Text="{Binding CardNumber, UpdateSourceTrigger=PropertyChanged}"
+                                 KeyDown="CardInputTextBox_KeyDown" />
+                    </StackPanel>
+
+                    <Border Grid.Row="2"
+                            Padding="16"
+                            BorderThickness="1"
+                            Margin="0,0,0,12">
+                        <StackPanel>
+                            <TextBlock Text="Imię" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding FirstName}" FontSize="22" Margin="0,4,0,12"/>
+
+                            <TextBlock Text="Nazwisko" FontWeight="Bold"/>
+                            <TextBlock Text="{Binding LastName}" FontSize="22"/>
+                        </StackPanel>
+                    </Border>
+
+                    <TextBlock Grid.Row="3"
+                               Text="{Binding Status}"
+                               FontSize="14"/>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Klucze"
+                     GotFocus="KeysTab_GotFocus">
+                <Grid Margin="15">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <Grid Grid.Row="0" Margin="0,0,0,12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="20"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="220"/>
+                            <ColumnDefinition Width="15"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <Button Grid.Column="0"
+                                Content="Nowy"
+                                Padding="12,6"
+                                Margin="0,0,8,0"
+                                Command="{Binding NewKeyCommand}" />
+
+                        <Button Grid.Column="1"
+                                Content="Zapisz"
+                                Padding="12,6"
+                                Margin="0,0,8,0"
+                                Command="{Binding SaveKeyCommand}" />
+
+                        <Button Grid.Column="2"
+                                Content="Usuń"
+                                Padding="12,6"
+                                Margin="0,0,8,0"
+                                Command="{Binding DeleteKeyCommand}" />
+
+                        <Button Grid.Column="3"
+                                Content="Wyczyść"
+                                Padding="12,6"
+                                Command="{Binding ClearKeyFormCommand}" />
+
+                        <TextBlock Grid.Column="5"
+                                   Text="Szukaj:"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,8,0" />
+
+                        <TextBox Grid.Column="6"
+                                 Height="30"
+                                 Text="{Binding KeySearchText, UpdateSourceTrigger=PropertyChanged}" />
+
+                        <CheckBox Grid.Column="8"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,12,0"
+                                  Content="Tylko aktywne"
+                                  IsChecked="{Binding KeyOnlyActive}" />
+
+                        <CheckBox Grid.Column="9"
+                                  VerticalAlignment="Center"
+                                  Margin="0,0,12,0"
+                                  Content="Bez RFID"
+                                  IsChecked="{Binding KeyOnlyWithoutRfid}" />
+
+                        <Button Grid.Column="10"
+                                HorizontalAlignment="Left"
+                                Content="Filtruj / Odśwież"
+                                Padding="12,6"
+                                Command="{Binding ApplyKeyFiltersCommand}" />
+                    </Grid>
+
+                    <TextBlock Grid.Row="1"
+                               Text="{Binding KeysStatus}"
+                               Margin="0,0,0,12"
+                               FontSize="14" />
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="2.5*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="1.5*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <DataGrid Grid.Column="0"
+                                  ItemsSource="{Binding Keys}"
+                                  SelectedItem="{Binding SelectedKey}"
+                                  AutoGenerateColumns="False"
+                                  IsReadOnly="True"
+                                  SelectionMode="Single">
+                            <DataGrid.Resources>
+                                <Style TargetType="DataGridRow">
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsActive}" Value="False">
+                                            <Setter Property="Opacity" Value="0.55"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </DataGrid.Resources>
+
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="ID"
+                                                    Binding="{Binding Id}"
+                                                    Width="70" />
+                                <DataGridTextColumn Header="Nazwa"
+                                                    Binding="{Binding Name}"
+                                                    Width="180" />
+                                <DataGridTextColumn Header="Opis"
+                                                    Binding="{Binding Description}"
+                                                    Width="220" />
+                                <DataGridTextColumn Header="RFID"
+                                                    Binding="{Binding RfidTag}"
+                                                    Width="170" />
+                                <DataGridTextColumn Header="Status RFID"
+                                                    Binding="{Binding RfidStatus}"
+                                                    Width="120" />
+                                <DataGridCheckBoxColumn Header="Aktywny"
+                                                        Binding="{Binding IsActive}"
+                                                        Width="90" />
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <Border Grid.Column="2"
+                                Padding="15"
+                                BorderThickness="1">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <TextBlock Text="Szczegóły klucza"
+                                           FontSize="18"
+                                           FontWeight="SemiBold"
+                                           Margin="0,0,0,16" />
+
+                                <Grid Grid.Row="1" Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="Nazwa:"
+                                               VerticalAlignment="Center" />
+
+                                    <TextBox Grid.Column="1"
+                                             Height="30"
+                                             Text="{Binding KeyName, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+
+                                <Grid Grid.Row="2" Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="Opis:"
+                                               VerticalAlignment="Top" />
+
+                                    <TextBox Grid.Column="1"
+                                             Height="90"
+                                             AcceptsReturn="True"
+                                             TextWrapping="Wrap"
+                                             VerticalScrollBarVisibility="Auto"
+                                             Text="{Binding KeyDescription, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+
+                                <Grid Grid.Row="3" Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="RFID:"
+                                               VerticalAlignment="Center" />
+
+                                    <TextBox Grid.Column="1"
+                                             Height="30"
+                                             Text="{Binding KeyRfidTag, UpdateSourceTrigger=PropertyChanged}" />
+                                </Grid>
+
+                                <Grid Grid.Row="4" Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="100"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+
+                                    <TextBlock Text="Aktywny:"
+                                               VerticalAlignment="Center" />
+
+                                    <CheckBox Grid.Column="1"
+                                              VerticalAlignment="Center"
+                                              IsChecked="{Binding KeyIsActive}" />
+                                </Grid>
+
+                                <Border Grid.Row="5"
+                                        Padding="10"
+                                        BorderThickness="1"
+                                        Margin="0,8,0,0">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Text="Skanowanie RFID dla klucza"
+                                                   FontWeight="SemiBold"
+                                                   Margin="0,0,0,8" />
+
+                                        <Grid Grid.Row="1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <TextBox
+                                                     Height="30"
+                                                     Text="{Binding ScannedKeyRfid, UpdateSourceTrigger=PropertyChanged}"
+                                                     KeyDown="KeyRfidScanTextBox_KeyDown" />
+
+                                            <Button Grid.Column="1"
+                                                    Margin="10,0,0,0"
+                                                    Content="Przepisz RFID"
+                                                    Padding="12,6"
+                                                    Command="{Binding AssignScannedRfidCommand}" />
+                                        </Grid>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <TextBlock Grid.Row="3"
+                               Margin="0,12,0,0"
+                               FontSize="12"
+                               Text="Skan w polu RFID kończ Enterem. Zapis tworzy lub aktualizuje rekord, Usuń dezaktywuje klucz." />
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Logi">
+                <Grid>
+                    <TextBlock Text="Moduł LOGI (placeholder)"
+                               VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
+                               FontSize="20"/>
+                </Grid>
+            </TabItem>
+
+            <TabItem Header="Ustawienia">
+                <Grid>
+                    <TextBlock Text="Moduł USTAWIENIA (placeholder)"
+                               VerticalAlignment="Center"
+                               HorizontalAlignment="Center"
+                               FontSize="20"/>
+                </Grid>
+            </TabItem>
+
+        </TabControl>
+    </Grid>
+</Window>
