@@ -14,12 +14,21 @@ public partial class MainViewModel : ObservableObject
 
     private readonly OracleTestService _oracleService = new();
     private readonly KeyService _keyService = new();
+    private readonly DatabaseSettingsService _databaseSettingsService = new();
 
     private PersonResult? _pendingPerson;
     private KeyItem? _pendingKey;
     private DateTime? _firstScanAt;
     private CancellationTokenSource? _scanTimeoutCts;
     private CancellationTokenSource? _successDisplayCts;
+
+    private DbSettingsSectionSnapshot? _oracleSnapshot;
+    private DbSettingsSectionSnapshot? _mySqlSnapshot;
+
+    public MainViewModel()
+    {
+        LoadDatabaseSettings();
+    }
 
     [ObservableProperty]
     private string cardNumber = string.Empty;
@@ -60,6 +69,15 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool canRemoveRfid;
 
+    [ObservableProperty]
+    private DbSettingsSection oracleSettings = new();
+
+    [ObservableProperty]
+    private DbSettingsSection mySqlSettings = new();
+
+    [ObservableProperty]
+    private string settingsStatus = "Gotowe.";
+
     public ObservableCollection<KeyItem> Keys { get; } = new();
     public ObservableCollection<ScannerLogItem> ScannerLogs { get; } = new();
 
@@ -68,6 +86,92 @@ public partial class MainViewModel : ObservableObject
         CanEditOrDeleteKey = value is not null;
         CanAssignRfid = value is not null && !value.HasRfid;
         CanRemoveRfid = value is not null && value.HasRfid;
+    }
+
+    public void LoadDatabaseSettings()
+    {
+        try
+        {
+            var loaded = _databaseSettingsService.Load();
+
+            OracleSettings = loaded.Oracle;
+            MySqlSettings = loaded.MySql;
+
+            _oracleSnapshot = OracleSettings.CreateSnapshot();
+            _mySqlSnapshot = MySqlSettings.CreateSnapshot();
+
+            SettingsStatus = "Wczytano ustawienia.";
+        }
+        catch (Exception ex)
+        {
+            SettingsStatus = $"Błąd wczytywania ustawień: {ex.Message}";
+        }
+    }
+
+    public void BeginEditOracle()
+    {
+        _oracleSnapshot = OracleSettings.CreateSnapshot();
+        OracleSettings.IsEditing = true;
+        SettingsStatus = "Edycja ustawień Oracle.";
+    }
+
+    public void BeginEditMySql()
+    {
+        _mySqlSnapshot = MySqlSettings.CreateSnapshot();
+        MySqlSettings.IsEditing = true;
+        SettingsStatus = "Edycja ustawień mySQL.";
+    }
+
+    public void CancelEditOracle()
+    {
+        if (_oracleSnapshot is not null)
+        {
+            OracleSettings.Restore(_oracleSnapshot);
+        }
+
+        OracleSettings.IsEditing = false;
+        SettingsStatus = "Anulowano zmiany Oracle.";
+    }
+
+    public void CancelEditMySql()
+    {
+        if (_mySqlSnapshot is not null)
+        {
+            MySqlSettings.Restore(_mySqlSnapshot);
+        }
+
+        MySqlSettings.IsEditing = false;
+        SettingsStatus = "Anulowano zmiany mySQL.";
+    }
+
+    public void SaveOracle()
+    {
+        try
+        {
+            _databaseSettingsService.Save(OracleSettings);
+            OracleSettings.IsEditing = false;
+            _oracleSnapshot = OracleSettings.CreateSnapshot();
+            SettingsStatus = "Zapisano ustawienia Oracle.";
+        }
+        catch (Exception ex)
+        {
+            SettingsStatus = $"Błąd zapisu Oracle: {ex.Message}";
+        }
+    }
+
+    public void SaveMySql()
+    {
+        try
+        {
+            _databaseSettingsService.Save(MySqlSettings);
+            MySqlSettings.IsEditing = false;
+            _mySqlSnapshot = MySqlSettings.CreateSnapshot();
+            SettingsStatus = "Zapisano ustawienia mySQL.";
+        }
+        catch (Exception ex)
+        {
+            SettingsStatus = $"Błąd zapisu mySQL: {ex.Message}";
+        }
     }
 
     [RelayCommand]
@@ -172,8 +276,6 @@ public partial class MainViewModel : ObservableObject
 
             try
             {
-                var personName = $"{_pendingPerson.FirstName} {_pendingPerson.LastName}".Trim();
-                var keyName = _pendingKey.Name;
                 var result = await _keyService.RegisterIssueOrReturnAsync(_pendingKey, _pendingPerson);
 
                 AddScannerLog(result.Message);

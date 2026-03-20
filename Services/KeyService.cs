@@ -28,15 +28,15 @@ public class KeyService
                 k.rfid_tag,
                 k.is_active,
                 CASE
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM key_loans kl
-                        WHERE kl.key_id = k.id
-                          AND kl.returned_at IS NULL
-                    ) THEN 1
+                    WHEN kl.id IS NOT NULL THEN 1
                     ELSE 0
-                END AS is_issued
+                END AS is_issued,
+                kl.issued_to_name,
+                kl.issued_at
             FROM `keys` k
+            LEFT JOIN key_loans kl
+                ON kl.key_id = k.id
+               AND kl.returned_at IS NULL
             WHERE k.is_active = 1
             ORDER BY k.name;
             """;
@@ -53,7 +53,9 @@ public class KeyService
                 Description = reader.IsDBNull(2) ? null : reader.GetString(2),
                 RfidTag = reader.IsDBNull(3) ? null : reader.GetString(3),
                 IsActive = !reader.IsDBNull(4) && reader.GetBoolean(4),
-                IsIssued = !reader.IsDBNull(5) && reader.GetBoolean(5)
+                IsIssued = !reader.IsDBNull(5) && reader.GetBoolean(5),
+                IssuedToName = reader.IsDBNull(6) ? null : reader.GetString(6),
+                IssuedAt = reader.IsDBNull(7) ? null : reader.GetDateTime(7)
             });
         }
 
@@ -73,15 +75,15 @@ public class KeyService
                 k.rfid_tag,
                 k.is_active,
                 CASE
-                    WHEN EXISTS (
-                        SELECT 1
-                        FROM key_loans kl
-                        WHERE kl.key_id = k.id
-                          AND kl.returned_at IS NULL
-                    ) THEN 1
+                    WHEN kl.id IS NOT NULL THEN 1
                     ELSE 0
-                END AS is_issued
+                END AS is_issued,
+                kl.issued_to_name,
+                kl.issued_at
             FROM `keys` k
+            LEFT JOIN key_loans kl
+                ON kl.key_id = k.id
+               AND kl.returned_at IS NULL
             WHERE k.is_active = 1
               AND k.rfid_tag = @rfidTag
             LIMIT 1;
@@ -101,7 +103,9 @@ public class KeyService
                 Description = reader.IsDBNull(2) ? null : reader.GetString(2),
                 RfidTag = reader.IsDBNull(3) ? null : reader.GetString(3),
                 IsActive = !reader.IsDBNull(4) && reader.GetBoolean(4),
-                IsIssued = !reader.IsDBNull(5) && reader.GetBoolean(5)
+                IsIssued = !reader.IsDBNull(5) && reader.GetBoolean(5),
+                IssuedToName = reader.IsDBNull(6) ? null : reader.GetString(6),
+                IssuedAt = reader.IsDBNull(7) ? null : reader.GetDateTime(7)
             };
         }
 

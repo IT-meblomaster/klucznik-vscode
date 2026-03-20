@@ -6,6 +6,10 @@
         Width="1240"
         WindowStartupLocation="CenterScreen">
 
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
+    </Window.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -249,13 +253,224 @@
                 </Grid>
             </TabItem>
 
+            <TabItem Header="Inwentaryzacja">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <ItemsControl ItemsSource="{Binding Keys}" Margin="16">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Width="170"
+                                        Height="110"
+                                        Margin="8"
+                                        Padding="10"
+                                        CornerRadius="10"
+                                        BorderBrush="#80909090"
+                                        BorderThickness="1"
+                                        ToolTip="{Binding InventoryTooltip}">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Background" Value="#D9F2E6"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsIssued}" Value="True">
+                                                    <Setter Property="Background" Value="#F4D6D6"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <TextBlock Text="{Binding Name}"
+                                                   FontSize="16"
+                                                   FontWeight="SemiBold"
+                                                   TextAlignment="Center"
+                                                   TextWrapping="Wrap"
+                                                   VerticalAlignment="Center"
+                                                   HorizontalAlignment="Center"/>
+
+                                        <TextBlock Grid.Row="1"
+                                                   Text="{Binding InventoryStatusText}"
+                                                   FontSize="12"
+                                                   HorizontalAlignment="Center"
+                                                   Margin="0,8,0,0"/>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+            </TabItem>
+
             <TabItem Header="Ustawienia">
-                <Grid>
-                    <TextBlock Text="Moduł USTAWIENIA (placeholder)"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Center"
-                               FontSize="20"/>
-                </Grid>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="16">
+
+                        <GroupBox Header="Oracle" Margin="0,0,0,16">
+                            <Grid Margin="12">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Text="Adres"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,8"/>
+                                <TextBox Grid.Column="1"
+                                         Margin="0,0,0,8"
+                                         Text="{Binding OracleSettings.Address, UpdateSourceTrigger=PropertyChanged}"
+                                         IsReadOnly="{Binding OracleSettings.IsReadOnly}"/>
+
+                                <TextBlock Grid.Row="1"
+                                           Text="Użytkownik"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,8"/>
+                                <TextBox Grid.Row="1"
+                                         Grid.Column="1"
+                                         Margin="0,0,0,8"
+                                         Text="{Binding OracleSettings.User, UpdateSourceTrigger=PropertyChanged}"
+                                         IsReadOnly="{Binding OracleSettings.IsReadOnly}"/>
+
+                                <TextBlock Grid.Row="2"
+                                           Text="Hasło"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,8"/>
+                                <PasswordBox x:Name="OraclePasswordBox"
+                                             Grid.Row="2"
+                                             Grid.Column="1"
+                                             Margin="0,0,0,8"
+                                             IsEnabled="{Binding OracleSettings.IsEditing}"
+                                             PasswordChanged="OraclePasswordBox_PasswordChanged"/>
+
+                                <TextBlock Grid.Row="3"
+                                           Text="Nazwa bazy"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,8"/>
+                                <TextBox Grid.Row="3"
+                                         Grid.Column="1"
+                                         Margin="0,0,0,8"
+                                         Text="{Binding OracleSettings.DatabaseName, UpdateSourceTrigger=PropertyChanged}"
+                                         IsReadOnly="{Binding OracleSettings.IsReadOnly}"/>
+
+                                <StackPanel Grid.Row="4"
+                                            Grid.ColumnSpan="2"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Right">
+                                    <Button Content="Edytuj"
+                                            Width="100"
+                                            Click="EditOracle_Click"
+                                            Visibility="{Binding OracleSettings.ShowEditButton, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                    <Button Content="Zapisz"
+                                            Width="100"
+                                            Margin="0,0,8,0"
+                                            Click="SaveOracle_Click"
+                                            Visibility="{Binding OracleSettings.ShowSaveCancelButtons, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                    <Button Content="Anuluj"
+                                            Width="100"
+                                            Click="CancelOracle_Click"
+                                            Visibility="{Binding OracleSettings.ShowSaveCancelButtons, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </StackPanel>
+                            </Grid>
+                        </GroupBox>
+
+                        <GroupBox Header="mySQL" Margin="0,0,0,16">
+                            <Grid Margin="12">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="140"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Text="Adres"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,8"/>
+                                <TextBox Grid.Column="1"
+                                         Margin="0,0,0,8"
+                                         Text="{Binding MySqlSettings.Address, UpdateSourceTrigger=PropertyChanged}"
+                                         IsReadOnly="{Binding MySqlSettings.IsReadOnly}"/>
+
+                                <TextBlock Grid.Row="1"
+                                           Text="Użytkownik"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,8"/>
+                                <TextBox Grid.Row="1"
+                                         Grid.Column="1"
+                                         Margin="0,0,0,8"
+                                         Text="{Binding MySqlSettings.User, UpdateSourceTrigger=PropertyChanged}"
+                                         IsReadOnly="{Binding MySqlSettings.IsReadOnly}"/>
+
+                                <TextBlock Grid.Row="2"
+                                           Text="Hasło"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,8"/>
+                                <PasswordBox x:Name="MySqlPasswordBox"
+                                             Grid.Row="2"
+                                             Grid.Column="1"
+                                             Margin="0,0,0,8"
+                                             IsEnabled="{Binding MySqlSettings.IsEditing}"
+                                             PasswordChanged="MySqlPasswordBox_PasswordChanged"/>
+
+                                <TextBlock Grid.Row="3"
+                                           Text="Nazwa bazy"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,8,8"/>
+                                <TextBox Grid.Row="3"
+                                         Grid.Column="1"
+                                         Margin="0,0,0,8"
+                                         Text="{Binding MySqlSettings.DatabaseName, UpdateSourceTrigger=PropertyChanged}"
+                                         IsReadOnly="{Binding MySqlSettings.IsReadOnly}"/>
+
+                                <StackPanel Grid.Row="4"
+                                            Grid.ColumnSpan="2"
+                                            Orientation="Horizontal"
+                                            HorizontalAlignment="Right">
+                                    <Button Content="Edytuj"
+                                            Width="100"
+                                            Click="EditMySql_Click"
+                                            Visibility="{Binding MySqlSettings.ShowEditButton, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                    <Button Content="Zapisz"
+                                            Width="100"
+                                            Margin="0,0,8,0"
+                                            Click="SaveMySql_Click"
+                                            Visibility="{Binding MySqlSettings.ShowSaveCancelButtons, Converter={StaticResource BoolToVisibilityConverter}}"/>
+
+                                    <Button Content="Anuluj"
+                                            Width="100"
+                                            Click="CancelMySql_Click"
+                                            Visibility="{Binding MySqlSettings.ShowSaveCancelButtons, Converter={StaticResource BoolToVisibilityConverter}}"/>
+                                </StackPanel>
+                            </Grid>
+                        </GroupBox>
+
+                        <TextBlock Text="{Binding SettingsStatus}"
+                                   FontSize="14"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
             </TabItem>
 
         </TabControl>

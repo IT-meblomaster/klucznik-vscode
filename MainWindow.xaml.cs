@@ -19,8 +19,22 @@ public partial class MainWindow : Window
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
+        SyncPasswordBoxesFromViewModel();
+
         CardInputTextBox.Focus();
         Keyboard.Focus(CardInputTextBox);
+    }
+
+    private void SyncPasswordBoxesFromViewModel()
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        if (OraclePasswordBox.Password != vm.OracleSettings.Password)
+            OraclePasswordBox.Password = vm.OracleSettings.Password ?? string.Empty;
+
+        if (MySqlPasswordBox.Password != vm.MySqlSettings.Password)
+            MySqlPasswordBox.Password = vm.MySqlSettings.Password ?? string.Empty;
     }
 
     private async void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -28,16 +42,25 @@ public partial class MainWindow : Window
         if (MainTabs.SelectedItem is not TabItem selectedTab)
             return;
 
-        if (selectedTab.Header?.ToString() != "Klucze")
-            return;
+        var header = selectedTab.Header?.ToString();
 
-        if (_keysLoadedOnce)
-            return;
-
-        if (DataContext is MainViewModel vm)
+        if (header == "Klucze" || header == "Inwentaryzacja")
         {
-            _keysLoadedOnce = true;
-            await vm.RefreshKeysAsync();
+            if (_keysLoadedOnce)
+                return;
+
+            if (DataContext is MainViewModel vm)
+            {
+                _keysLoadedOnce = true;
+                await vm.RefreshKeysAsync();
+            }
+
+            return;
+        }
+
+        if (header == "Ustawienia")
+        {
+            SyncPasswordBoxesFromViewModel();
         }
     }
 
@@ -161,18 +184,80 @@ public partial class MainWindow : Window
         EditKey_Click(sender, e);
     }
 
-    private void LockButton_Click(object sender, RoutedEventArgs e)
+    private void EditOracle_Click(object sender, RoutedEventArgs e)
     {
-        MainTabs.SelectedIndex = 0;
+        if (DataContext is not MainViewModel vm)
+            return;
 
+        vm.BeginEditOracle();
+        SyncPasswordBoxesFromViewModel();
+    }
+
+    private void SaveOracle_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.OracleSettings.Password = OraclePasswordBox.Password;
+        vm.SaveOracle();
+        SyncPasswordBoxesFromViewModel();
+    }
+
+    private void CancelOracle_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.CancelEditOracle();
+        SyncPasswordBoxesFromViewModel();
+    }
+
+    private void EditMySql_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.BeginEditMySql();
+        SyncPasswordBoxesFromViewModel();
+    }
+
+    private void SaveMySql_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.MySqlSettings.Password = MySqlPasswordBox.Password;
+        vm.SaveMySql();
+        SyncPasswordBoxesFromViewModel();
+    }
+
+    private void CancelMySql_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.CancelEditMySql();
+        SyncPasswordBoxesFromViewModel();
+    }
+
+    private void OraclePasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
         if (DataContext is MainViewModel vm)
         {
-            vm.FirstName = string.Empty;
-            vm.LastName = string.Empty;
-            vm.Status = "Zablokowano. Przyłóż kartę.";
+            vm.OracleSettings.Password = OraclePasswordBox.Password;
         }
+    }
 
-        CardInputTextBox.Focus();
-        Keyboard.Focus(CardInputTextBox);
+    private void MySqlPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            vm.MySqlSettings.Password = MySqlPasswordBox.Password;
+        }
+    }
+
+    private void LockButton_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBox.Show("Blokada aplikacji - do implementacji.");
     }
 }
