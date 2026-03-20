@@ -4,7 +4,9 @@
         Title="System"
         Height="760"
         Width="1240"
-        WindowStartupLocation="CenterScreen">
+        WindowStartupLocation="CenterScreen"
+        PreviewTextInput="Window_PreviewTextInput"
+        PreviewKeyDown="Window_PreviewKeyDown">
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
@@ -34,34 +36,11 @@
             <TabItem Header="Skaner">
                 <Grid Margin="20">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="1*"/>
                         <RowDefinition Height="2*"/>
-                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <TextBlock Text="Zeskanuj kartę pracownika i kartę klucza w ciągu 10 sekund"
-                               FontSize="22"
-                               FontWeight="SemiBold"
-                               Margin="0,0,0,18" />
-
-                    <StackPanel Grid.Row="1"
-                                Orientation="Horizontal"
-                                Margin="0,0,0,18">
-                        <TextBlock Text="Skan:"
-                                   VerticalAlignment="Center"
-                                   Width="60" />
-
-                        <TextBox x:Name="CardInputTextBox"
-                                 Width="320"
-                                 Height="36"
-                                 FontSize="18"
-                                 Text="{Binding CardNumber, UpdateSourceTrigger=PropertyChanged}"
-                                 KeyDown="CardInputTextBox_KeyDown" />
-                    </StackPanel>
-
-                    <Grid Grid.Row="2" Margin="0,0,0,18">
+                    <Grid Grid.Row="0" Margin="0,0,0,18">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="20"/>
@@ -135,7 +114,7 @@
                         </GroupBox>
                     </Grid>
 
-                    <GroupBox Grid.Row="3" Header="Log operacji">
+                    <GroupBox Grid.Row="1" Header="Log operacji">
                         <DataGrid ItemsSource="{Binding ScannerLogs}"
                                   AutoGenerateColumns="False"
                                   IsReadOnly="True"
@@ -151,11 +130,6 @@
                             </DataGrid.Columns>
                         </DataGrid>
                     </GroupBox>
-
-                    <TextBlock Grid.Row="4"
-                               Text="{Binding Status}"
-                               FontSize="16"
-                               Margin="0,16,0,0"/>
                 </Grid>
             </TabItem>
 
@@ -220,15 +194,6 @@
                               SelectionMode="Single"
                               SelectionUnit="FullRow"
                               MouseDoubleClick="KeysGrid_MouseDoubleClick">
-                        <DataGrid.RowStyle>
-                            <Style TargetType="DataGridRow">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsIssued}" Value="True">
-                                        <Setter Property="Background" Value="#DCEEFF"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </DataGrid.RowStyle>
                         <DataGrid.Columns>
                             <DataGridTextColumn Header="Nazwa"
                                                 Binding="{Binding Name}"

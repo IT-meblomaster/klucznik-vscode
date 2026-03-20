@@ -1,4 +1,6 @@
-﻿using System.Windows;
+﻿using System;
+using System.Text;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using MojaAplikacja.ViewModels;
@@ -8,6 +10,10 @@ namespace MojaAplikacja;
 public partial class MainWindow : Window
 {
     private bool _keysLoadedOnce = false;
+
+    private readonly StringBuilder _scanBuffer = new();
+    private DateTime _lastScanCharAt = DateTime.MinValue;
+    private static readonly TimeSpan ScanGapReset = TimeSpan.FromMilliseconds(250);
 
     public MainWindow()
     {
@@ -20,9 +26,7 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         SyncPasswordBoxesFromViewModel();
-
-        CardInputTextBox.Focus();
-        Keyboard.Focus(CardInputTextBox);
+        Keyboard.Focus(this);
     }
 
     private void SyncPasswordBoxesFromViewModel()
@@ -30,10 +34,10 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel vm)
             return;
 
-        if (OraclePasswordBox.Password != vm.OracleSettings.Password)
+        if (OraclePasswordBox is not null && OraclePasswordBox.Password != vm.OracleSettings.Password)
             OraclePasswordBox.Password = vm.OracleSettings.Password ?? string.Empty;
 
-        if (MySqlPasswordBox.Password != vm.MySqlSettings.Password)
+        if (MySqlPasswordBox is not null && MySqlPasswordBox.Password != vm.MySqlSettings.Password)
             MySqlPasswordBox.Password = vm.MySqlSettings.Password ?? string.Empty;
     }
 
@@ -64,23 +68,74 @@ public partial class MainWindow : Window
         }
     }
 
-    private async void CardInputTextBox_KeyDown(object sender, KeyEventArgs e)
+    private bool IsEditingTextInput()
     {
-        if (e.Key != Key.Enter)
+        var focused = Keyboard.FocusedElement;
+
+        return focused is TextBox
+            || focused is PasswordBox
+            || focused is ComboBox;
+    }
+
+    private void ResetScanBuffer()
+    {
+        _scanBuffer.Clear();
+        _lastScanCharAt = DateTime.MinValue;
+    }
+
+    private void Window_PreviewTextInput(object sender, TextCompositionEventArgs e)
+    {
+        if (IsEditingTextInput())
             return;
 
-        if (DataContext is not MainViewModel vm)
+        if (string.IsNullOrEmpty(e.Text))
             return;
+
+        var now = DateTime.Now;
+
+        if (_lastScanCharAt != DateTime.MinValue && now - _lastScanCharAt > ScanGapReset)
+        {
+            _scanBuffer.Clear();
+        }
+
+        _lastScanCharAt = now;
+        _scanBuffer.Append(e.Text);
 
         e.Handled = true;
+    }
 
-        var code = CardInputTextBox.Text.Trim();
-        CardInputTextBox.Clear();
+    private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (IsEditingTextInput())
+            return;
 
-        await vm.ProcessScannerCodeAsync(code);
+        if (e.Key == Key.Enter || e.Key == Key.Return)
+        {
+            if (DataContext is not MainViewModel vm)
+                return;
 
-        CardInputTextBox.Focus();
-        Keyboard.Focus(CardInputTextBox);
+            var code = _scanBuffer.ToString().Trim();
+            ResetScanBuffer();
+
+            if (string.IsNullOrWhiteSpace(code))
+                return;
+
+            e.Handled = true;
+            await vm.ProcessScannerCodeAsync(code);
+            return;
+        }
+
+        if (e.Key == Key.Escape)
+        {
+            ResetScanBuffer();
+            return;
+        }
+
+        if (e.Key == Key.Back && _scanBuffer.Length > 0)
+        {
+            _scanBuffer.Length -= 1;
+            e.Handled = true;
+        }
     }
 
     private async void NewKey_Click(object sender, RoutedEventArgs e)
@@ -113,7 +168,7 @@ public partial class MainWindow : Window
             Owner = this
         };
 
-        dialog.SetModeForEdit(key.Name, key.Description, key.HasRfid);
+        dialog.SetModeForEdit(key.Name, key.Description);
 
         if (dialog.ShowDialog() == true)
         {
@@ -258,6 +313,16 @@ public partial class MainWindow : Window
 
     private void LockButton_Click(object sender, RoutedEventArgs e)
     {
-        MessageBox.Show("Blokada aplikacji - do implementacji.");
+        MainTabs.SelectedIndex = 0;
+
+        if (DataContext is MainViewModel vm)
+        {
+            vm.FirstName = string.Empty;
+            vm.LastName = string.Empty;
+            vm.Status = "Zablokowano. Przyłóż kartę.";
+        }
+
+        ResetScanBuffer();
+        Keyboard.Focus(this);
     }
 }
