@@ -7,6 +7,8 @@ public class KeyItem
     public string? Description { get; set; }
     public string? RfidTag { get; set; }
     public bool IsActive { get; set; }
+    public bool IsIssued { get; set; }
 
     public string RfidStatus => string.IsNullOrWhiteSpace(RfidTag) ? "Brak RFID" : "Przypisany";
+    public bool HasRfid => !string.IsNullOrWhiteSpace(RfidTag);
 }

@@ -2,15 +2,24 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MojaAplikacja.Models;
 using MojaAplikacja.Services;
-using MySqlConnector;
 using System.Collections.ObjectModel;
+using System.Windows;
 
 namespace MojaAplikacja.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
+    private static readonly TimeSpan ScanWindow = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan SuccessDisplayWindow = TimeSpan.FromSeconds(5);
+
     private readonly OracleTestService _oracleService = new();
     private readonly KeyService _keyService = new();
+
+    private PersonResult? _pendingPerson;
+    private KeyItem? _pendingKey;
+    private DateTime? _firstScanAt;
+    private CancellationTokenSource? _scanTimeoutCts;
+    private CancellationTokenSource? _successDisplayCts;
 
     [ObservableProperty]
     private string cardNumber = string.Empty;
@@ -22,70 +31,48 @@ public partial class MainViewModel : ObservableObject
     private string lastName = string.Empty;
 
     [ObservableProperty]
-    private string status = "Przyłóż kartę do czytnika.";
+    private string employeeCardDisplay = string.Empty;
+
+    [ObservableProperty]
+    private string currentKeyName = string.Empty;
+
+    [ObservableProperty]
+    private string currentKeyDescription = string.Empty;
+
+    [ObservableProperty]
+    private string currentKeyRfidStatus = string.Empty;
+
+    [ObservableProperty]
+    private string status = "Przyłóż kartę pracownika lub klucza.";
 
     [ObservableProperty]
     private string keysStatus = "Gotowe.";
 
     [ObservableProperty]
-    private bool isBusy;
-
-    [ObservableProperty]
     private KeyItem? selectedKey;
 
     [ObservableProperty]
-    private string keyName = string.Empty;
+    private bool canEditOrDeleteKey;
 
     [ObservableProperty]
-    private string keyDescription = string.Empty;
+    private bool canAssignRfid;
 
     [ObservableProperty]
-    private string keyRfidTag = string.Empty;
-
-    [ObservableProperty]
-    private bool keyIsActive = true;
-
-    [ObservableProperty]
-    private string keySearchText = string.Empty;
-
-    [ObservableProperty]
-    private bool keyOnlyActive = true;
-
-    [ObservableProperty]
-    private bool keyOnlyWithoutRfid;
-
-    [ObservableProperty]
-    private string scannedKeyRfid = string.Empty;
+    private bool canRemoveRfid;
 
     public ObservableCollection<KeyItem> Keys { get; } = new();
+    public ObservableCollection<ScannerLogItem> ScannerLogs { get; } = new();
 
     partial void OnSelectedKeyChanged(KeyItem? value)
     {
-        if (value is null)
-        {
-            KeyName = string.Empty;
-            KeyDescription = string.Empty;
-            KeyRfidTag = string.Empty;
-            KeyIsActive = true;
-            ScannedKeyRfid = string.Empty;
-            return;
-        }
-
-        KeyName = value.Name;
-        KeyDescription = value.Description ?? string.Empty;
-        KeyRfidTag = value.RfidTag ?? string.Empty;
-        KeyIsActive = value.IsActive;
-        ScannedKeyRfid = string.Empty;
+        CanEditOrDeleteKey = value is not null;
+        CanAssignRfid = value is not null && !value.HasRfid;
+        CanRemoveRfid = value is not null && value.HasRfid;
     }
 
     [RelayCommand]
     private async Task LookupCardAsync()
     {
-        if (IsBusy)
-        {
-            return;
-        }
-
         var scannedValue = CardNumber?.Trim() ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(scannedValue))
@@ -94,51 +81,137 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        try
+        await ProcessScannerCodeAsync(scannedValue);
+    }
+
+    public async Task ProcessScannerCodeAsync(string scannedValue)
+    {
+        CancelSuccessDisplayClear();
+
+        var code = scannedValue.Trim();
+
+        if (string.IsNullOrWhiteSpace(code))
         {
-            IsBusy = true;
-            Status = "Szukanie osoby...";
+            return;
+        }
 
-            var person = await _oracleService.FindPersonByCardAsync(scannedValue);
+        if (_firstScanAt.HasValue && DateTime.Now - _firstScanAt.Value > ScanWindow)
+        {
+            ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
+        }
 
-            if (person is null)
+        var person = await _oracleService.FindPersonByCardAsync(code);
+        var key = await _keyService.GetKeyByRfidAsync(code);
+
+        if (person is null && key is null)
+        {
+            Status = $"Nie rozpoznano skanu: {code}";
+            return;
+        }
+
+        if (person is not null && key is not null)
+        {
+            Status = $"Skan {code} pasuje jednocześnie do pracownika i klucza.";
+            return;
+        }
+
+        if (_pendingPerson is null && _pendingKey is null)
+        {
+            _firstScanAt = DateTime.Now;
+
+            if (person is not null)
             {
-                FirstName = string.Empty;
-                LastName = string.Empty;
-                Status = $"Nie znaleziono osoby dla numeru: {scannedValue}";
+                SetPendingPerson(person);
+                Status = "Zeskanowano pracownika. Oczekiwanie na klucz...";
+            }
+            else if (key is not null)
+            {
+                SetPendingKey(key);
+                Status = "Zeskanowano klucz. Oczekiwanie na pracownika...";
+            }
+
+            StartScanTimeout();
+            return;
+        }
+
+        if (person is not null)
+        {
+            if (_pendingPerson is null)
+            {
+                SetPendingPerson(person);
             }
             else
             {
-                FirstName = person.FirstName;
-                LastName = person.LastName;
-                Status = $"Znaleziono: {person.FirstName} {person.LastName}";
+                _firstScanAt = DateTime.Now;
+                SetPendingPerson(person);
+                Status = "Zmieniono pracownika. Oczekiwanie na klucz...";
+                StartScanTimeout();
+                return;
             }
         }
-        catch (Exception ex)
+
+        if (key is not null)
         {
-            FirstName = string.Empty;
-            LastName = string.Empty;
-            Status = $"Błąd: {ex.Message}";
+            if (_pendingKey is null)
+            {
+                SetPendingKey(key);
+            }
+            else
+            {
+                _firstScanAt = DateTime.Now;
+                SetPendingKey(key);
+                Status = "Zmieniono klucz. Oczekiwanie na pracownika...";
+                StartScanTimeout();
+                return;
+            }
         }
-        finally
+
+        if (_pendingPerson is not null && _pendingKey is not null)
         {
-            IsBusy = false;
+            CancelScanTimeout();
+
+            try
+            {
+                var personName = $"{_pendingPerson.FirstName} {_pendingPerson.LastName}".Trim();
+                var keyName = _pendingKey.Name;
+                var result = await _keyService.RegisterIssueOrReturnAsync(_pendingKey, _pendingPerson);
+
+                AddScannerLog(result.Message);
+                Status = result.Message;
+
+                _pendingPerson = null;
+                _pendingKey = null;
+                _firstScanAt = null;
+
+                StartSuccessDisplayClear();
+                await RefreshKeysAsync();
+            }
+            catch (Exception ex)
+            {
+                ClearScannerState($"Błąd operacji: {ex.Message}");
+            }
         }
     }
 
-    [RelayCommand]
-    private async Task LoadKeysAsync()
+    public async Task RefreshKeysAsync()
     {
         try
         {
+            var currentSelectedId = SelectedKey?.Id;
+
             Keys.Clear();
             KeysStatus = "Ładowanie kluczy...";
 
-            var items = await _keyService.GetKeysAsync(KeySearchText, KeyOnlyActive, KeyOnlyWithoutRfid);
+            var items = await _keyService.GetKeysAsync();
 
             foreach (var item in items)
             {
                 Keys.Add(item);
+            }
+
+            if (currentSelectedId.HasValue)
+            {
+                SelectedKey = Keys.FirstOrDefault(x => x.Id == currentSelectedId.Value);
             }
 
             KeysStatus = $"Wczytano {Keys.Count} kluczy.";
@@ -150,86 +223,50 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private async Task ApplyKeyFiltersAsync()
-    {
-        await LoadKeysAsync();
-    }
-
-    [RelayCommand]
-    private void NewKey()
-    {
-        SelectedKey = null;
-        KeyName = string.Empty;
-        KeyDescription = string.Empty;
-        KeyRfidTag = string.Empty;
-        KeyIsActive = true;
-        ScannedKeyRfid = string.Empty;
-        KeysStatus = "Nowy rekord.";
-    }
-
-    [RelayCommand]
-    private async Task SaveKeyAsync()
+    public async Task CreateKeyAsync(string name, string? description)
     {
         try
         {
-            var normalizedName = KeyName.Trim();
-
-            if (string.IsNullOrWhiteSpace(normalizedName))
-            {
-                KeysStatus = "Nazwa jest wymagana.";
-                return;
-            }
-
-            var item = new KeyItem
-            {
-                Id = SelectedKey?.Id ?? 0,
-                Name = normalizedName,
-                Description = string.IsNullOrWhiteSpace(KeyDescription) ? null : KeyDescription.Trim(),
-                RfidTag = string.IsNullOrWhiteSpace(KeyRfidTag) ? null : KeyRfidTag.Trim(),
-                IsActive = KeyIsActive
-            };
-
-            if (SelectedKey is null)
-            {
-                var newId = await _keyService.InsertAsync(item);
-                KeysStatus = $"Dodano klucz (ID: {newId}).";
-            }
-            else
-            {
-                await _keyService.UpdateAsync(item);
-                KeysStatus = "Zaktualizowano klucz.";
-            }
-
-            await LoadKeysAsync();
-            ClearKeyFormInternal();
-        }
-        catch (MySqlException ex) when (ex.Number == 1062)
-        {
-            KeysStatus = "Duplikat danych. Nazwa lub RFID już istnieje.";
+            await _keyService.InsertAsync(name, description);
+            KeysStatus = "Dodano klucz.";
+            await RefreshKeysAsync();
         }
         catch (Exception ex)
         {
-            KeysStatus = $"Błąd zapisu: {ex.Message}";
+            KeysStatus = $"Błąd dodawania: {ex.Message}";
         }
     }
 
-    [RelayCommand]
-    private async Task DeleteKeyAsync()
+    public async Task EditKeyAsync(uint id, string name, string? description, bool removeRfid)
     {
         try
         {
-            if (SelectedKey is null)
-            {
-                KeysStatus = "Brak wybranego rekordu.";
-                return;
-            }
+            await _keyService.UpdateAsync(id, name, description, removeRfid);
+            KeysStatus = "Zaktualizowano klucz.";
+            await RefreshKeysAsync();
+            SelectedKey = Keys.FirstOrDefault(x => x.Id == id);
+        }
+        catch (Exception ex)
+        {
+            KeysStatus = $"Błąd edycji: {ex.Message}";
+        }
+    }
 
-            await _keyService.SoftDeleteAsync(SelectedKey.Id);
-            KeysStatus = "Klucz dezaktywowany.";
+    public async Task DeleteSelectedKeyAsync()
+    {
+        if (SelectedKey is null)
+        {
+            KeysStatus = "Nie wybrano klucza.";
+            return;
+        }
 
-            await LoadKeysAsync();
-            ClearKeyFormInternal();
+        try
+        {
+            var id = SelectedKey.Id;
+            await _keyService.DeleteAsync(id);
+            KeysStatus = "Usunięto klucz.";
+            SelectedKey = null;
+            await RefreshKeysAsync();
         }
         catch (Exception ex)
         {
@@ -237,36 +274,76 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    [RelayCommand]
-    private void ClearKeyForm()
+    public async Task AssignRfidToSelectedKeyAsync(string scannedRfid)
     {
-        ClearKeyFormInternal();
-        KeysStatus = "Wyczyszczono formularz.";
-    }
-
-    [RelayCommand]
-    private void AssignScannedRfid()
-    {
-        var value = ScannedKeyRfid.Trim();
-
-        if (string.IsNullOrWhiteSpace(value))
+        if (SelectedKey is null)
         {
-            KeysStatus = "Brak zeskanowanego RFID.";
+            KeysStatus = "Nie wybrano klucza.";
             return;
         }
 
-        KeyRfidTag = value;
-        KeysStatus = $"Przepisano RFID: {value}";
+        if (SelectedKey.HasRfid)
+        {
+            KeysStatus = "Wybrany klucz ma już przypisany RFID.";
+            return;
+        }
+
+        var value = scannedRfid.Trim();
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            KeysStatus = "Brak odczytanego RFID.";
+            return;
+        }
+
+        try
+        {
+            var existingKeyName = await _keyService.GetKeyNameByRfidAsync(value);
+
+            if (!string.IsNullOrWhiteSpace(existingKeyName))
+            {
+                KeysStatus = $"RFID przypisany do klucza {existingKeyName}";
+                return;
+            }
+
+            var id = SelectedKey.Id;
+            await _keyService.AssignRfidAsync(id, value);
+            KeysStatus = $"Przypisano RFID do klucza: {SelectedKey.Name}";
+            await RefreshKeysAsync();
+            SelectedKey = Keys.FirstOrDefault(x => x.Id == id);
+        }
+        catch (Exception ex)
+        {
+            KeysStatus = $"Błąd przypisywania RFID: {ex.Message}";
+        }
     }
 
-    private void ClearKeyFormInternal()
+    public async Task RemoveRfidFromSelectedKeyAsync()
     {
-        SelectedKey = null;
-        KeyName = string.Empty;
-        KeyDescription = string.Empty;
-        KeyRfidTag = string.Empty;
-        KeyIsActive = true;
-        ScannedKeyRfid = string.Empty;
+        if (SelectedKey is null)
+        {
+            KeysStatus = "Nie wybrano klucza.";
+            return;
+        }
+
+        if (!SelectedKey.HasRfid)
+        {
+            KeysStatus = "Wybrany klucz nie ma przypisanego RFID.";
+            return;
+        }
+
+        try
+        {
+            var id = SelectedKey.Id;
+            await _keyService.RemoveRfidAsync(id);
+            KeysStatus = $"Usunięto RFID z klucza: {SelectedKey.Name}";
+            await RefreshKeysAsync();
+            SelectedKey = Keys.FirstOrDefault(x => x.Id == id);
+        }
+        catch (Exception ex)
+        {
+            KeysStatus = $"Błąd usuwania RFID: {ex.Message}";
+        }
     }
 
     public void ClearCardInput()
@@ -274,8 +351,134 @@ public partial class MainViewModel : ObservableObject
         CardNumber = string.Empty;
     }
 
-    public void ClearScannedKeyRfid()
+    private void SetPendingPerson(PersonResult person)
     {
-        ScannedKeyRfid = string.Empty;
+        _pendingPerson = person;
+        FirstName = person.FirstName;
+        LastName = person.LastName;
+        EmployeeCardDisplay = person.CardNumber;
+    }
+
+    private void SetPendingKey(KeyItem key)
+    {
+        _pendingKey = key;
+        CurrentKeyName = key.Name;
+        CurrentKeyDescription = key.Description ?? string.Empty;
+        CurrentKeyRfidStatus = key.RfidStatus;
+    }
+
+    private void ClearScannerPanels()
+    {
+        FirstName = string.Empty;
+        LastName = string.Empty;
+        EmployeeCardDisplay = string.Empty;
+
+        CurrentKeyName = string.Empty;
+        CurrentKeyDescription = string.Empty;
+        CurrentKeyRfidStatus = string.Empty;
+    }
+
+    private void ClearScannerState(string statusMessage)
+    {
+        CancelScanTimeout();
+        CancelSuccessDisplayClear();
+        _pendingPerson = null;
+        _pendingKey = null;
+        _firstScanAt = null;
+        ClearScannerPanels();
+        Status = statusMessage;
+    }
+
+    private void StartScanTimeout()
+    {
+        CancelScanTimeout();
+        _scanTimeoutCts = new CancellationTokenSource();
+        var token = _scanTimeoutCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(ScanWindow, token);
+
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    if (_pendingPerson is not null || _pendingKey is not null)
+                    {
+                        ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
+                    }
+                });
+            }
+            catch (TaskCanceledException)
+            {
+            }
+        }, token);
+    }
+
+    private void CancelScanTimeout()
+    {
+        if (_scanTimeoutCts is null)
+        {
+            return;
+        }
+
+        _scanTimeoutCts.Cancel();
+        _scanTimeoutCts.Dispose();
+        _scanTimeoutCts = null;
+    }
+
+    private void StartSuccessDisplayClear()
+    {
+        CancelSuccessDisplayClear();
+        _successDisplayCts = new CancellationTokenSource();
+        var token = _successDisplayCts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(SuccessDisplayWindow, token);
+
+                if (token.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Application.Current.Dispatcher.Invoke(() =>
+                {
+                    ClearScannerPanels();
+                    Status = "Przyłóż kartę pracownika lub klucza.";
+                });
+            }
+            catch (TaskCanceledException)
+            {
+            }
+        }, token);
+    }
+
+    private void CancelSuccessDisplayClear()
+    {
+        if (_successDisplayCts is null)
+        {
+            return;
+        }
+
+        _successDisplayCts.Cancel();
+        _successDisplayCts.Dispose();
+        _successDisplayCts = null;
+    }
+
+    private void AddScannerLog(string message)
+    {
+        ScannerLogs.Insert(0, new ScannerLogItem
+        {
+            Timestamp = DateTime.Now,
+            Message = message
+        });
     }
 }
