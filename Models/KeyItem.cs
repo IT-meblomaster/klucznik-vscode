@@ -6,6 +6,7 @@ public class KeyItem
     public string Name { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? RfidTag { get; set; }
+    public uint? CurrentRfidTagId { get; set; }
     public bool IsActive { get; set; }
     public bool IsIssued { get; set; }
 

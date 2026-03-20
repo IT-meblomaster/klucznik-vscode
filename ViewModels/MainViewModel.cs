@@ -384,12 +384,6 @@ public partial class MainViewModel : ObservableObject
             return;
         }
 
-        if (SelectedKey.HasRfid)
-        {
-            KeysStatus = "Wybrany klucz ma już przypisany RFID.";
-            return;
-        }
-
         var value = scannedRfid.Trim();
 
         if (string.IsNullOrWhiteSpace(value))
@@ -402,7 +396,8 @@ public partial class MainViewModel : ObservableObject
         {
             var existingKeyName = await _keyService.GetKeyNameByRfidAsync(value);
 
-            if (!string.IsNullOrWhiteSpace(existingKeyName))
+            if (!string.IsNullOrWhiteSpace(existingKeyName) &&
+                !string.Equals(existingKeyName, SelectedKey.Name, StringComparison.OrdinalIgnoreCase))
             {
                 KeysStatus = $"RFID przypisany do klucza {existingKeyName}";
                 return;
