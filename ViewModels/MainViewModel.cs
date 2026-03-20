@@ -9,12 +9,17 @@ namespace MojaAplikacja.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
+    private const string AllUsersOption = "Wszyscy";
+    private const string AllKeysOption = "Wszystkie";
+
     private static readonly TimeSpan ScanWindow = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan SuccessDisplayWindow = TimeSpan.FromSeconds(5);
 
     private readonly OracleTestService _oracleService = new();
     private readonly KeyService _keyService = new();
     private readonly DatabaseSettingsService _databaseSettingsService = new();
+
+    private readonly List<KeyLoanReportItem> _allLoanReports = new();
 
     private PersonResult? _pendingPerson;
     private KeyItem? _pendingKey;
@@ -28,6 +33,11 @@ public partial class MainViewModel : ObservableObject
     public MainViewModel()
     {
         LoadDatabaseSettings();
+
+        ReportUsers.Add(AllUsersOption);
+        ReportKeys.Add(AllKeysOption);
+        SelectedReportUser = AllUsersOption;
+        SelectedReportKey = AllKeysOption;
     }
 
     [ObservableProperty]
@@ -78,14 +88,52 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string settingsStatus = "Gotowe.";
 
+    [ObservableProperty]
+    private DateTime? reportDateFrom;
+
+    [ObservableProperty]
+    private DateTime? reportDateTo;
+
+    [ObservableProperty]
+    private string selectedReportUser = AllUsersOption;
+
+    [ObservableProperty]
+    private string selectedReportKey = AllKeysOption;
+
+    [ObservableProperty]
+    private string reportStatus = "Gotowe.";
+
     public ObservableCollection<KeyItem> Keys { get; } = new();
     public ObservableCollection<ScannerLogItem> ScannerLogs { get; } = new();
+    public ObservableCollection<KeyLoanReportItem> LoanReports { get; } = new();
+    public ObservableCollection<string> ReportUsers { get; } = new();
+    public ObservableCollection<string> ReportKeys { get; } = new();
 
     partial void OnSelectedKeyChanged(KeyItem? value)
     {
         CanEditOrDeleteKey = value is not null;
         CanAssignRfid = value is not null && !value.HasRfid;
         CanRemoveRfid = value is not null && value.HasRfid;
+    }
+
+    partial void OnReportDateFromChanged(DateTime? value)
+    {
+        ApplyLoanReportFilters();
+    }
+
+    partial void OnReportDateToChanged(DateTime? value)
+    {
+        ApplyLoanReportFilters();
+    }
+
+    partial void OnSelectedReportUserChanged(string value)
+    {
+        ApplyLoanReportFilters();
+    }
+
+    partial void OnSelectedReportKeyChanged(string value)
+    {
+        ApplyLoanReportFilters();
     }
 
     public void LoadDatabaseSettings()
@@ -172,6 +220,45 @@ public partial class MainViewModel : ObservableObject
         {
             SettingsStatus = $"Błąd zapisu mySQL: {ex.Message}";
         }
+    }
+
+    public async Task LoadLoanReportsAsync()
+    {
+        try
+        {
+            LoanReports.Clear();
+            ReportStatus = "Ładowanie raportu...";
+
+            var items = await _keyService.GetLoanReportAsync(null, null, null, null);
+
+            _allLoanReports.Clear();
+            _allLoanReports.AddRange(items);
+
+            RebuildLoanReportFilterSources();
+            ApplyLoanReportFilters();
+        }
+        catch (Exception ex)
+        {
+            _allLoanReports.Clear();
+            LoanReports.Clear();
+            ReportUsers.Clear();
+            ReportKeys.Clear();
+            ReportUsers.Add(AllUsersOption);
+            ReportKeys.Add(AllKeysOption);
+            SelectedReportUser = AllUsersOption;
+            SelectedReportKey = AllKeysOption;
+            ReportStatus = $"Błąd raportu: {ex.Message}";
+        }
+    }
+
+    public Task ClearLoanReportFiltersAsync()
+    {
+        ReportDateFrom = null;
+        ReportDateTo = null;
+        SelectedReportUser = AllUsersOption;
+        SelectedReportKey = AllKeysOption;
+        ApplyLoanReportFilters();
+        return Task.CompletedTask;
     }
 
     [RelayCommand]
@@ -287,6 +374,7 @@ public partial class MainViewModel : ObservableObject
 
                 StartSuccessDisplayClear();
                 await RefreshKeysAsync();
+                await LoadLoanReportsAsync();
             }
             catch (Exception ex)
             {
@@ -446,6 +534,89 @@ public partial class MainViewModel : ObservableObject
     public void ClearCardInput()
     {
         CardNumber = string.Empty;
+    }
+
+    private void RebuildLoanReportFilterSources()
+    {
+        var currentUser = SelectedReportUser;
+        var currentKey = SelectedReportKey;
+
+        var users = _allLoanReports
+            .Select(x => x.UserName)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
+
+        var keys = _allLoanReports
+            .Select(x => x.KeyName)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
+
+        ReportUsers.Clear();
+        ReportUsers.Add(AllUsersOption);
+        foreach (var user in users)
+        {
+            ReportUsers.Add(user);
+        }
+
+        ReportKeys.Clear();
+        ReportKeys.Add(AllKeysOption);
+        foreach (var key in keys)
+        {
+            ReportKeys.Add(key);
+        }
+
+        SelectedReportUser = ReportUsers.Contains(currentUser) ? currentUser : AllUsersOption;
+        SelectedReportKey = ReportKeys.Contains(currentKey) ? currentKey : AllKeysOption;
+    }
+
+    private void ApplyLoanReportFilters()
+    {
+        if (_allLoanReports.Count == 0)
+        {
+            LoanReports.Clear();
+            ReportStatus = "Brak danych raportu.";
+            return;
+        }
+
+        IEnumerable<KeyLoanReportItem> filtered = _allLoanReports;
+
+        if (ReportDateFrom.HasValue)
+        {
+            filtered = filtered.Where(x => x.EventTime.Date >= ReportDateFrom.Value.Date);
+        }
+
+        if (ReportDateTo.HasValue)
+        {
+            filtered = filtered.Where(x => x.EventTime.Date <= ReportDateTo.Value.Date);
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedReportUser) &&
+            !string.Equals(SelectedReportUser, AllUsersOption, StringComparison.Ordinal))
+        {
+            filtered = filtered.Where(x => string.Equals(x.UserName, SelectedReportUser, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (!string.IsNullOrWhiteSpace(SelectedReportKey) &&
+            !string.Equals(SelectedReportKey, AllKeysOption, StringComparison.Ordinal))
+        {
+            filtered = filtered.Where(x => string.Equals(x.KeyName, SelectedReportKey, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var items = filtered
+            .OrderByDescending(x => x.EventTime)
+            .ToList();
+
+        LoanReports.Clear();
+        foreach (var item in items)
+        {
+            LoanReports.Add(item);
+        }
+
+        ReportStatus = $"Wyświetlono {LoanReports.Count} pozycji raportu.";
     }
 
     private void SetPendingPerson(PersonResult person)

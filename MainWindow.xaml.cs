@@ -10,6 +10,7 @@ namespace MojaAplikacja;
 public partial class MainWindow : Window
 {
     private bool _keysLoadedOnce = false;
+    private bool _reportsLoadedOnce = false;
 
     private readonly StringBuilder _scanBuffer = new();
     private DateTime _lastScanCharAt = DateTime.MinValue;
@@ -57,6 +58,20 @@ public partial class MainWindow : Window
             {
                 _keysLoadedOnce = true;
                 await vm.RefreshKeysAsync();
+            }
+
+            return;
+        }
+
+        if (header == "Logi")
+        {
+            if (_reportsLoadedOnce)
+                return;
+
+            if (DataContext is MainViewModel vm)
+            {
+                _reportsLoadedOnce = true;
+                await vm.LoadLoanReportsAsync();
             }
 
             return;
@@ -228,6 +243,14 @@ public partial class MainWindow : Window
         if (result == MessageBoxResult.Yes)
         {
             await vm.RemoveRfidFromSelectedKeyAsync();
+        }
+    }
+
+    private async void ClearReportFilters_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is MainViewModel vm)
+        {
+            await vm.ClearLoanReportFiltersAsync();
         }
     }
 

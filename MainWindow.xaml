@@ -210,11 +210,105 @@
             </TabItem>
 
             <TabItem Header="Logi">
-                <Grid>
-                    <TextBlock Text="Moduł LOGI (placeholder)"
-                               VerticalAlignment="Center"
-                               HorizontalAlignment="Center"
-                               FontSize="20"/>
+                <Grid Margin="15">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <GroupBox Header="Filtry" Grid.Row="0" Margin="0,0,0,10">
+                        <Grid Margin="10">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="55"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="55"/>
+                                <ColumnDefinition Width="120"/>
+                                <ColumnDefinition Width="75"/>
+                                <ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="40"/>
+                                <ColumnDefinition Width="180"/>
+                            </Grid.ColumnDefinitions>
+
+                            <TextBlock Text="Od"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,4,6"/>
+                            <DatePicker Grid.Column="1"
+                                        Height="26"
+                                        Margin="0,0,8,6"
+                                        SelectedDate="{Binding ReportDateFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                            <TextBlock Grid.Column="2"
+                                       Text="Do"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,4,6"/>
+                            <DatePicker Grid.Column="3"
+                                        Height="26"
+                                        Margin="0,0,8,6"
+                                        SelectedDate="{Binding ReportDateTo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                            <TextBlock Grid.Column="4"
+                                       Text="Użytk."
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,4,6"/>
+                            <ComboBox Grid.Column="5"
+                                      Height="26"
+                                      Margin="0,0,8,6"
+                                      ItemsSource="{Binding ReportUsers}"
+                                      SelectedItem="{Binding SelectedReportUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                            <TextBlock Grid.Column="6"
+                                       Text="Klucz"
+                                       VerticalAlignment="Center"
+                                       Margin="0,0,4,6"/>
+                            <ComboBox Grid.Column="7"
+                                      Height="26"
+                                      Margin="0,0,0,6"
+                                      ItemsSource="{Binding ReportKeys}"
+                                      SelectedItem="{Binding SelectedReportKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
+
+                            <StackPanel Grid.Row="1"
+                                        Grid.ColumnSpan="8"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Wyczyść filtry"
+                                        Width="120"
+                                        Height="28"
+                                        Click="ClearReportFilters_Click"/>
+                            </StackPanel>
+                        </Grid>
+                    </GroupBox>
+
+                    <TextBlock Grid.Row="1"
+                               Text="{Binding ReportStatus}"
+                               Margin="0,0,0,10"
+                               FontSize="14"/>
+
+                    <DataGrid Grid.Row="2"
+                              ItemsSource="{Binding LoanReports}"
+                              AutoGenerateColumns="False"
+                              IsReadOnly="True"
+                              CanUserAddRows="False"
+                              HeadersVisibility="Column">
+                        <DataGrid.Columns>
+                            <DataGridTextColumn Header="Data i godzina"
+                                                Binding="{Binding EventTime, StringFormat={}{0:yyyy-MM-dd HH:mm:ss}}"
+                                                Width="190"/>
+                            <DataGridTextColumn Header="Typ"
+                                                Binding="{Binding EventType}"
+                                                Width="110"/>
+                            <DataGridTextColumn Header="Klucz"
+                                                Binding="{Binding KeyName}"
+                                                Width="260"/>
+                            <DataGridTextColumn Header="Użytkownik"
+                                                Binding="{Binding UserName}"
+                                                Width="300"/>
+                        </DataGrid.Columns>
+                    </DataGrid>
                 </Grid>
             </TabItem>
 

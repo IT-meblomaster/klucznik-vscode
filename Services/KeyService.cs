@@ -127,6 +127,87 @@ public class KeyService
         return null;
     }
 
+    public async Task<List<KeyLoanReportItem>> GetLoanReportAsync(
+        DateTime? dateFrom,
+        DateTime? dateTo,
+        string? userFilter,
+        string? keyFilter)
+    {
+        var result = new List<KeyLoanReportItem>();
+
+        await using var connection = new MySqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        const string sql = """
+            SELECT
+                report.event_time,
+                report.event_type,
+                report.key_name,
+                report.user_name,
+                report.user_card,
+                report.rfid_code
+            FROM
+            (
+                SELECT
+                    kl.issued_at AS event_time,
+                    'Pobranie' AS event_type,
+                    k.name AS key_name,
+                    kl.issued_to_name AS user_name,
+                    kl.issued_to_card AS user_card,
+                    r.rfid_code AS rfid_code
+                FROM key_loans kl
+                JOIN `keys` k
+                    ON k.id = kl.key_id
+                LEFT JOIN rfid_tags r
+                    ON r.id = kl.rfid_tag_id
+
+                UNION ALL
+
+                SELECT
+                    kl.returned_at AS event_time,
+                    'Zwrot' AS event_type,
+                    k.name AS key_name,
+                    kl.returned_by_name AS user_name,
+                    kl.returned_by_card AS user_card,
+                    r.rfid_code AS rfid_code
+                FROM key_loans kl
+                JOIN `keys` k
+                    ON k.id = kl.key_id
+                LEFT JOIN rfid_tags r
+                    ON r.id = kl.rfid_tag_id
+                WHERE kl.returned_at IS NOT NULL
+            ) report
+            WHERE (@dateFrom IS NULL OR report.event_time >= @dateFrom)
+              AND (@dateTo IS NULL OR report.event_time < DATE_ADD(@dateTo, INTERVAL 1 DAY))
+              AND (@userFilter IS NULL OR report.user_name LIKE CONCAT('%', @userFilter, '%'))
+              AND (@keyFilter IS NULL OR report.key_name LIKE CONCAT('%', @keyFilter, '%'))
+            ORDER BY report.event_time DESC;
+            """;
+
+        await using var command = new MySqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@dateFrom", ToDbValue(dateFrom));
+        command.Parameters.AddWithValue("@dateTo", ToDbValue(dateTo));
+        command.Parameters.AddWithValue("@userFilter", NormalizeFilter(userFilter));
+        command.Parameters.AddWithValue("@keyFilter", NormalizeFilter(keyFilter));
+
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            result.Add(new KeyLoanReportItem
+            {
+                EventTime = reader.GetDateTime(0),
+                EventType = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                KeyName = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                UserName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                UserCard = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                RfidCode = reader.IsDBNull(5) ? null : reader.GetString(5)
+            });
+        }
+
+        return result;
+    }
+
     public async Task<uint> InsertAsync(string name, string? description)
     {
         await using var connection = new MySqlConnection(_connectionString);
@@ -657,7 +738,17 @@ public class KeyService
         return value.HasValue ? value.Value : DBNull.Value;
     }
 
+    private static object ToDbValue(DateTime? value)
+    {
+        return value.HasValue ? value.Value : DBNull.Value;
+    }
+
     private static object NormalizeText(string? value)
+    {
+        return string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+    }
+
+    private static object NormalizeFilter(string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
     }
