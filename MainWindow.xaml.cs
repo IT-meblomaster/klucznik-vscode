@@ -3,6 +3,7 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using MojaAplikacja.Services;
 using MojaAplikacja.ViewModels;
 
 namespace MojaAplikacja;
@@ -16,12 +17,26 @@ public partial class MainWindow : Window
     private DateTime _lastScanCharAt = DateTime.MinValue;
     private static readonly TimeSpan ScanGapReset = TimeSpan.FromMilliseconds(250);
 
+    private readonly RawInputRfidScanner _rawInputScanner;
+
     public MainWindow()
     {
         InitializeComponent();
         DataContext = new MainViewModel();
+
+        _rawInputScanner = new RawInputRfidScanner(this, "VID_08FF", "PID_0009");
+        _rawInputScanner.CodeScanned += RawInputScanner_CodeScanned;
+
         Loaded += MainWindow_Loaded;
         MainTabs.SelectionChanged += MainTabs_SelectionChanged;
+    }
+
+    private async void RawInputScanner_CodeScanned(object? sender, string code)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        await vm.ProcessScannerCodeAsync(code);
     }
 
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
@@ -100,6 +115,9 @@ public partial class MainWindow : Window
 
     private void Window_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
+        if (_rawInputScanner.IsRegistered)
+            return;
+
         if (IsEditingTextInput())
             return;
 
@@ -121,6 +139,9 @@ public partial class MainWindow : Window
 
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
+        if (_rawInputScanner.IsRegistered)
+            return;
+
         if (IsEditingTextInput())
             return;
 

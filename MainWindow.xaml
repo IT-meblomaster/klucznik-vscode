@@ -232,9 +232,10 @@
                                 <ColumnDefinition Width="180"/>
                                 <ColumnDefinition Width="40"/>
                                 <ColumnDefinition Width="180"/>
+                                <ColumnDefinition Width="180"/>
                             </Grid.ColumnDefinitions>
 
-                            <TextBlock Text="Od"
+                            <TextBlock Text="Od:"
                                        VerticalAlignment="Center"
                                        Margin="0,0,4,6"/>
                             <DatePicker Grid.Column="1"
@@ -243,7 +244,7 @@
                                         SelectedDate="{Binding ReportDateFrom, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
                             <TextBlock Grid.Column="2"
-                                       Text="Do"
+                                       Text="Do:"
                                        VerticalAlignment="Center"
                                        Margin="0,0,4,6"/>
                             <DatePicker Grid.Column="3"
@@ -252,7 +253,7 @@
                                         SelectedDate="{Binding ReportDateTo, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
                             <TextBlock Grid.Column="4"
-                                       Text="Użytk."
+                                       Text="Pracownik:"
                                        VerticalAlignment="Center"
                                        Margin="0,0,4,6"/>
                             <ComboBox Grid.Column="5"
@@ -262,7 +263,7 @@
                                       SelectedItem="{Binding SelectedReportUser, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
 
                             <TextBlock Grid.Column="6"
-                                       Text="Klucz"
+                                       Text="Klucz:"
                                        VerticalAlignment="Center"
                                        Margin="0,0,4,6"/>
                             <ComboBox Grid.Column="7"
@@ -270,16 +271,12 @@
                                       Margin="0,0,0,6"
                                       ItemsSource="{Binding ReportKeys}"
                                       SelectedItem="{Binding SelectedReportKey, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"/>
-
-                            <StackPanel Grid.Row="1"
-                                        Grid.ColumnSpan="8"
-                                        Orientation="Horizontal"
-                                        HorizontalAlignment="Right">
-                                <Button Content="Wyczyść filtry"
-                                        Width="120"
-                                        Height="28"
-                                        Click="ClearReportFilters_Click"/>
-                            </StackPanel>
+                            <Button Grid.Column="8"
+                                    Content="Wyczyść filtry"
+                                    Width="120"
+                                    Height="26"
+                                    Margin="0,0,0,6"
+                                    Click="ClearReportFilters_Click"/>
                         </Grid>
                     </GroupBox>
 
