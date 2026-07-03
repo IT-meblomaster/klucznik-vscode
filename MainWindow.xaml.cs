@@ -12,6 +12,8 @@ public partial class MainWindow : Window
 {
     private bool _keysLoadedOnce = false;
     private bool _reportsLoadedOnce = false;
+    private bool _adminUnlocked = false;
+    private bool _isChangingTabProgrammatically = false;
 
     private readonly StringBuilder _scanBuffer = new();
     private DateTime _lastScanCharAt = DateTime.MinValue;
@@ -42,7 +44,91 @@ public partial class MainWindow : Window
     private void MainWindow_Loaded(object sender, RoutedEventArgs e)
     {
         SyncPasswordBoxesFromViewModel();
+
+        if (DataContext is MainViewModel vm && !vm.AdminPasswordExists)
+        {
+            SetAdminUnlocked(true);
+            SelectTabProgrammatically(4);
+            vm.AdminPasswordStatus = "Ustaw hasło administratora przed dalszą konfiguracją.";
+            Keyboard.Focus(AdminNewPasswordBox);
+            return;
+        }
+
+        SetAdminUnlocked(false);
         Keyboard.Focus(this);
+    }
+
+    private void SetAdminUnlocked(bool unlocked)
+    {
+        _adminUnlocked = unlocked;
+        LockButton.Content = unlocked ? "Zablokuj ustawienia" : "Odblokuj ustawienia";
+    }
+
+    private void SelectTabProgrammatically(int tabIndex)
+    {
+        _isChangingTabProgrammatically = true;
+        MainTabs.SelectedIndex = tabIndex;
+        _isChangingTabProgrammatically = false;
+    }
+
+    private bool EnsureAdminUnlocked()
+    {
+        if (_adminUnlocked)
+            return true;
+
+        if (DataContext is not MainViewModel vm)
+            return false;
+
+        if (!vm.AdminPasswordExists)
+        {
+            SetAdminUnlocked(true);
+            return true;
+        }
+
+        string errorMessage = string.Empty;
+
+        while (true)
+        {
+            var dialog = new AdminPasswordDialog { Owner = this };
+
+            if (!string.IsNullOrWhiteSpace(errorMessage))
+            {
+                dialog.Loaded += (_, _) => dialog.SetError(errorMessage);
+            }
+
+            if (dialog.ShowDialog() != true)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(dialog.Password))
+            {
+                errorMessage = "Podaj hasło.";
+                continue;
+            }
+
+            if (vm.VerifyAdminPassword(dialog.Password))
+            {
+                SetAdminUnlocked(true);
+                return true;
+            }
+
+            errorMessage = "Nieprawidłowe hasło.";
+        }
+    }
+
+    private void ProtectedTab_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (_adminUnlocked)
+            return;
+
+        e.Handled = true;
+
+        if (sender is not TabItem tab)
+            return;
+
+        if (EnsureAdminUnlocked())
+        {
+            tab.IsSelected = true;
+        }
     }
 
     private void SyncPasswordBoxesFromViewModel()
@@ -59,10 +145,19 @@ public partial class MainWindow : Window
 
     private async void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (_isChangingTabProgrammatically)
+            return;
+
         if (MainTabs.SelectedItem is not TabItem selectedTab)
             return;
 
         var header = selectedTab.Header?.ToString();
+
+        if ((header == "Klucze" || header == "Ustawienia") && !_adminUnlocked)
+        {
+            SelectTabProgrammatically(0);
+            return;
+        }
 
         if (header == "Klucze" || header == "Inwentaryzacja")
         {
@@ -133,7 +228,6 @@ public partial class MainWindow : Window
 
         _lastScanCharAt = now;
         _scanBuffer.Append(e.Text);
-
         e.Handled = true;
     }
 
@@ -179,16 +273,16 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel vm)
             return;
 
-        var dialog = new KeyEditDialog
-        {
-            Owner = this
-        };
-
+        var dialog = new KeyEditDialog { Owner = this };
         dialog.SetModeForCreate();
 
         if (dialog.ShowDialog() == true)
         {
-            await vm.CreateKeyAsync(dialog.KeyNameValue, dialog.KeyDescriptionValue);
+            await vm.CreateKeyAsync(
+                dialog.KeyNameValue,
+                dialog.KeyBuildingValue,
+                dialog.KeyHangerValue,
+                dialog.KeyDescriptionValue);
         }
     }
 
@@ -199,16 +293,18 @@ public partial class MainWindow : Window
 
         var key = vm.SelectedKey;
 
-        var dialog = new KeyEditDialog
-        {
-            Owner = this
-        };
-
-        dialog.SetModeForEdit(key.Name, key.Description);
+        var dialog = new KeyEditDialog { Owner = this };
+        dialog.SetModeForEdit(key.Name, key.Building, key.Hanger, key.Description);
 
         if (dialog.ShowDialog() == true)
         {
-            await vm.EditKeyAsync(key.Id, dialog.KeyNameValue, dialog.KeyDescriptionValue, dialog.RemoveRfid);
+            await vm.EditKeyAsync(
+                key.Id,
+                dialog.KeyNameValue,
+                dialog.KeyBuildingValue,
+                dialog.KeyHangerValue,
+                dialog.KeyDescriptionValue,
+                dialog.RemoveRfid);
         }
     }
 
@@ -224,9 +320,7 @@ public partial class MainWindow : Window
             MessageBoxImage.Question);
 
         if (result == MessageBoxResult.Yes)
-        {
             await vm.DeleteSelectedKeyAsync();
-        }
     }
 
     private async void AssignRfid_Click(object sender, RoutedEventArgs e)
@@ -234,10 +328,7 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel vm || vm.SelectedKey is null)
             return;
 
-        var dialog = new RfidAssignDialog
-        {
-            Owner = this
-        };
+        var dialog = new RfidAssignDialog { Owner = this };
 
         if (dialog.ShowDialog() == true)
         {
@@ -262,17 +353,13 @@ public partial class MainWindow : Window
             MessageBoxImage.Question);
 
         if (result == MessageBoxResult.Yes)
-        {
             await vm.RemoveRfidFromSelectedKeyAsync();
-        }
     }
 
     private async void ClearReportFilters_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel vm)
-        {
             await vm.ClearLoanReportFiltersAsync();
-        }
     }
 
     private void KeysGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
@@ -285,85 +372,105 @@ public partial class MainWindow : Window
 
     private void EditOracle_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainViewModel vm)
-            return;
-
-        vm.BeginEditOracle();
-        SyncPasswordBoxesFromViewModel();
+        if (DataContext is MainViewModel vm)
+        {
+            vm.BeginEditOracle();
+            SyncPasswordBoxesFromViewModel();
+        }
     }
 
     private void SaveOracle_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainViewModel vm)
-            return;
-
-        vm.OracleSettings.Password = OraclePasswordBox.Password;
-        vm.SaveOracle();
-        SyncPasswordBoxesFromViewModel();
+        if (DataContext is MainViewModel vm)
+        {
+            vm.OracleSettings.Password = OraclePasswordBox.Password;
+            vm.SaveOracle();
+            SyncPasswordBoxesFromViewModel();
+        }
     }
 
     private void CancelOracle_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainViewModel vm)
-            return;
-
-        vm.CancelEditOracle();
-        SyncPasswordBoxesFromViewModel();
+        if (DataContext is MainViewModel vm)
+        {
+            vm.CancelEditOracle();
+            SyncPasswordBoxesFromViewModel();
+        }
     }
 
     private void EditMySql_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainViewModel vm)
-            return;
-
-        vm.BeginEditMySql();
-        SyncPasswordBoxesFromViewModel();
+        if (DataContext is MainViewModel vm)
+        {
+            vm.BeginEditMySql();
+            SyncPasswordBoxesFromViewModel();
+        }
     }
 
     private void SaveMySql_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainViewModel vm)
-            return;
-
-        vm.MySqlSettings.Password = MySqlPasswordBox.Password;
-        vm.SaveMySql();
-        SyncPasswordBoxesFromViewModel();
+        if (DataContext is MainViewModel vm)
+        {
+            vm.MySqlSettings.Password = MySqlPasswordBox.Password;
+            vm.SaveMySql();
+            SyncPasswordBoxesFromViewModel();
+        }
     }
 
     private void CancelMySql_Click(object sender, RoutedEventArgs e)
     {
-        if (DataContext is not MainViewModel vm)
-            return;
-
-        vm.CancelEditMySql();
-        SyncPasswordBoxesFromViewModel();
+        if (DataContext is MainViewModel vm)
+        {
+            vm.CancelEditMySql();
+            SyncPasswordBoxesFromViewModel();
+        }
     }
 
     private void OraclePasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel vm)
-        {
             vm.OracleSettings.Password = OraclePasswordBox.Password;
-        }
     }
 
     private void MySqlPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel vm)
-        {
             vm.MySqlSettings.Password = MySqlPasswordBox.Password;
+    }
+
+    private void SaveAdminPassword_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        var saved = vm.SaveAdminPassword(AdminNewPasswordBox.Password, AdminRepeatPasswordBox.Password);
+
+        if (saved)
+        {
+            AdminNewPasswordBox.Clear();
+            AdminRepeatPasswordBox.Clear();
+            SetAdminUnlocked(true);
         }
     }
 
     private void LockButton_Click(object sender, RoutedEventArgs e)
     {
-        MainTabs.SelectedIndex = 0;
+        if (!_adminUnlocked)
+        {
+            if (EnsureAdminUnlocked())
+                Keyboard.Focus(this);
+
+            return;
+        }
+
+        SetAdminUnlocked(false);
+        SelectTabProgrammatically(0);
 
         if (DataContext is MainViewModel vm)
         {
             vm.FirstName = string.Empty;
             vm.LastName = string.Empty;
-            vm.Status = "Zablokowano. Przyłóż kartę.";
+            vm.Status = "Zablokowano ustawienia. Przyłóż kartę.";
         }
 
         ResetScanBuffer();

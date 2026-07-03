@@ -11,6 +11,7 @@ public partial class MainViewModel : ObservableObject
 {
     private const string AllUsersOption = "Wszyscy";
     private const string AllKeysOption = "Wszystkie";
+    private const string AllBuildingsOption = "Wszystkie";
 
     private static readonly TimeSpan ScanWindow = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan SuccessDisplayWindow = TimeSpan.FromSeconds(5);
@@ -18,6 +19,7 @@ public partial class MainViewModel : ObservableObject
     private readonly OracleTestService _oracleService = new();
     private readonly KeyService _keyService = new();
     private readonly DatabaseSettingsService _databaseSettingsService = new();
+    private readonly AdminPasswordService _adminPasswordService = new();
 
     private readonly List<KeyLoanReportItem> _allLoanReports = new();
 
@@ -33,11 +35,15 @@ public partial class MainViewModel : ObservableObject
     public MainViewModel()
     {
         LoadDatabaseSettings();
+        LoadAdminPasswordStatus();
 
         ReportUsers.Add(AllUsersOption);
         ReportKeys.Add(AllKeysOption);
+        ReportBuildings.Add(AllBuildingsOption);
+
         SelectedReportUser = AllUsersOption;
         SelectedReportKey = AllKeysOption;
+        SelectedReportBuilding = AllBuildingsOption;
     }
 
     [ObservableProperty]
@@ -54,6 +60,9 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string currentKeyName = string.Empty;
+
+    [ObservableProperty]
+    private string currentKeyBuilding = string.Empty;
 
     [ObservableProperty]
     private string currentKeyDescription = string.Empty;
@@ -89,6 +98,12 @@ public partial class MainViewModel : ObservableObject
     private string settingsStatus = "Gotowe.";
 
     [ObservableProperty]
+    private bool adminPasswordExists;
+
+    [ObservableProperty]
+    private string adminPasswordStatus = "Gotowe.";
+
+    [ObservableProperty]
     private DateTime? reportDateFrom;
 
     [ObservableProperty]
@@ -101,13 +116,22 @@ public partial class MainViewModel : ObservableObject
     private string selectedReportKey = AllKeysOption;
 
     [ObservableProperty]
+    private string selectedReportBuilding = AllBuildingsOption;
+
+    [ObservableProperty]
     private string reportStatus = "Gotowe.";
 
+    public string AdminPasswordHeader => AdminPasswordExists
+        ? "Hasło administratora - zmiana"
+        : "Hasło administratora - pierwsze ustawienie";
+
     public ObservableCollection<KeyItem> Keys { get; } = new();
+    public ObservableCollection<InventoryKeyGroup> InventoryGroups { get; } = new();
     public ObservableCollection<ScannerLogItem> ScannerLogs { get; } = new();
     public ObservableCollection<KeyLoanReportItem> LoanReports { get; } = new();
     public ObservableCollection<string> ReportUsers { get; } = new();
     public ObservableCollection<string> ReportKeys { get; } = new();
+    public ObservableCollection<string> ReportBuildings { get; } = new();
 
     partial void OnSelectedKeyChanged(KeyItem? value)
     {
@@ -116,25 +140,16 @@ public partial class MainViewModel : ObservableObject
         CanRemoveRfid = value is not null && value.HasRfid;
     }
 
-    partial void OnReportDateFromChanged(DateTime? value)
+    partial void OnAdminPasswordExistsChanged(bool value)
     {
-        ApplyLoanReportFilters();
+        OnPropertyChanged(nameof(AdminPasswordHeader));
     }
 
-    partial void OnReportDateToChanged(DateTime? value)
-    {
-        ApplyLoanReportFilters();
-    }
-
-    partial void OnSelectedReportUserChanged(string value)
-    {
-        ApplyLoanReportFilters();
-    }
-
-    partial void OnSelectedReportKeyChanged(string value)
-    {
-        ApplyLoanReportFilters();
-    }
+    partial void OnReportDateFromChanged(DateTime? value) => ApplyLoanReportFilters();
+    partial void OnReportDateToChanged(DateTime? value) => ApplyLoanReportFilters();
+    partial void OnSelectedReportUserChanged(string value) => ApplyLoanReportFilters();
+    partial void OnSelectedReportKeyChanged(string value) => ApplyLoanReportFilters();
+    partial void OnSelectedReportBuildingChanged(string value) => ApplyLoanReportFilters();
 
     public void LoadDatabaseSettings()
     {
@@ -156,6 +171,69 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
+    public void LoadAdminPasswordStatus()
+    {
+        try
+        {
+            AdminPasswordExists = _adminPasswordService.HasPassword();
+            AdminPasswordStatus = AdminPasswordExists
+                ? "Hasło administratora jest ustawione."
+                : "Hasło administratora nie jest jeszcze ustawione.";
+        }
+        catch (Exception ex)
+        {
+            AdminPasswordExists = false;
+            AdminPasswordStatus = $"Błąd wczytywania hasła administratora: {ex.Message}";
+        }
+    }
+
+    public bool SaveAdminPassword(string newPassword, string repeatedPassword)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(newPassword))
+            {
+                AdminPasswordStatus = "Podaj nowe hasło.";
+                return false;
+            }
+
+            if (newPassword.Length < 4)
+            {
+                AdminPasswordStatus = "Hasło musi mieć co najmniej 4 znaki.";
+                return false;
+            }
+
+            if (!string.Equals(newPassword, repeatedPassword, StringComparison.Ordinal))
+            {
+                AdminPasswordStatus = "Hasła nie są identyczne.";
+                return false;
+            }
+
+            _adminPasswordService.SavePassword(newPassword);
+
+            AdminPasswordExists = true;
+            AdminPasswordStatus = "Hasło administratora zostało zapisane.";
+            return true;
+        }
+        catch (Exception ex)
+        {
+            AdminPasswordStatus = $"Błąd zapisu hasła administratora: {ex.Message}";
+            return false;
+        }
+    }
+
+    public bool VerifyAdminPassword(string password)
+    {
+        try
+        {
+            return _adminPasswordService.VerifyPassword(password);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public void BeginEditOracle()
     {
         _oracleSnapshot = OracleSettings.CreateSnapshot();
@@ -173,9 +251,7 @@ public partial class MainViewModel : ObservableObject
     public void CancelEditOracle()
     {
         if (_oracleSnapshot is not null)
-        {
             OracleSettings.Restore(_oracleSnapshot);
-        }
 
         OracleSettings.IsEditing = false;
         SettingsStatus = "Anulowano zmiany Oracle.";
@@ -184,9 +260,7 @@ public partial class MainViewModel : ObservableObject
     public void CancelEditMySql()
     {
         if (_mySqlSnapshot is not null)
-        {
             MySqlSettings.Restore(_mySqlSnapshot);
-        }
 
         MySqlSettings.IsEditing = false;
         SettingsStatus = "Anulowano zmiany mySQL.";
@@ -227,7 +301,6 @@ public partial class MainViewModel : ObservableObject
         try
         {
             LoanReports.Clear();
-            ReportStatus = "Ładowanie raportu...";
 
             var items = await _keyService.GetLoanReportAsync(null, null, null, null);
 
@@ -241,12 +314,19 @@ public partial class MainViewModel : ObservableObject
         {
             _allLoanReports.Clear();
             LoanReports.Clear();
+
             ReportUsers.Clear();
             ReportKeys.Clear();
+            ReportBuildings.Clear();
+
             ReportUsers.Add(AllUsersOption);
             ReportKeys.Add(AllKeysOption);
+            ReportBuildings.Add(AllBuildingsOption);
+
             SelectedReportUser = AllUsersOption;
             SelectedReportKey = AllKeysOption;
+            SelectedReportBuilding = AllBuildingsOption;
+
             ReportStatus = $"Błąd raportu: {ex.Message}";
         }
     }
@@ -257,6 +337,7 @@ public partial class MainViewModel : ObservableObject
         ReportDateTo = null;
         SelectedReportUser = AllUsersOption;
         SelectedReportKey = AllKeysOption;
+        SelectedReportBuilding = AllBuildingsOption;
         ApplyLoanReportFilters();
         return Task.CompletedTask;
     }
@@ -282,14 +363,10 @@ public partial class MainViewModel : ObservableObject
         var code = scannedValue.Trim();
 
         if (string.IsNullOrWhiteSpace(code))
-        {
             return;
-        }
 
         if (_firstScanAt.HasValue && DateTime.Now - _firstScanAt.Value > ScanWindow)
-        {
             ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
-        }
 
         var person = await _oracleService.FindPersonByCardAsync(code);
         var key = await _keyService.GetKeyByRfidAsync(code);
@@ -390,34 +467,31 @@ public partial class MainViewModel : ObservableObject
             var currentSelectedId = SelectedKey?.Id;
 
             Keys.Clear();
-            KeysStatus = "Ładowanie kluczy...";
+            InventoryGroups.Clear();
 
             var items = await _keyService.GetKeysAsync();
 
             foreach (var item in items)
-            {
                 Keys.Add(item);
-            }
+
+            RebuildInventoryGroups();
 
             if (currentSelectedId.HasValue)
-            {
                 SelectedKey = Keys.FirstOrDefault(x => x.Id == currentSelectedId.Value);
-            }
-
-            KeysStatus = $"Wczytano {Keys.Count} kluczy.";
         }
         catch (Exception ex)
         {
             Keys.Clear();
+            InventoryGroups.Clear();
             KeysStatus = $"Błąd MariaDB: {ex.Message}";
         }
     }
 
-    public async Task CreateKeyAsync(string name, string? description)
+    public async Task CreateKeyAsync(string name, string? building, string? hanger, string? description)
     {
         try
         {
-            await _keyService.InsertAsync(name, description);
+            await _keyService.InsertAsync(name, building, hanger, description);
             KeysStatus = "Dodano klucz.";
             await RefreshKeysAsync();
         }
@@ -427,11 +501,11 @@ public partial class MainViewModel : ObservableObject
         }
     }
 
-    public async Task EditKeyAsync(uint id, string name, string? description, bool removeRfid)
+    public async Task EditKeyAsync(uint id, string name, string? building, string? hanger, string? description, bool removeRfid)
     {
         try
         {
-            await _keyService.UpdateAsync(id, name, description, removeRfid);
+            await _keyService.UpdateAsync(id, name, building, hanger, description, removeRfid);
             KeysStatus = "Zaktualizowano klucz.";
             await RefreshKeysAsync();
             SelectedKey = Keys.FirstOrDefault(x => x.Id == id);
@@ -536,10 +610,33 @@ public partial class MainViewModel : ObservableObject
         CardNumber = string.Empty;
     }
 
+    private void RebuildInventoryGroups()
+    {
+        InventoryGroups.Clear();
+
+        var groups = Keys
+            .GroupBy(x => x.BuildingDisplay, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x.Key, StringComparer.OrdinalIgnoreCase);
+
+        foreach (var group in groups)
+        {
+            var inventoryGroup = new InventoryKeyGroup
+            {
+                BuildingName = group.Key
+            };
+
+            foreach (var key in group.OrderBy(x => x.Name, StringComparer.OrdinalIgnoreCase))
+                inventoryGroup.Keys.Add(key);
+
+            InventoryGroups.Add(inventoryGroup);
+        }
+    }
+
     private void RebuildLoanReportFilterSources()
     {
         var currentUser = SelectedReportUser;
         var currentKey = SelectedReportKey;
+        var currentBuilding = SelectedReportBuilding;
 
         var users = _allLoanReports
             .Select(x => x.UserName)
@@ -555,44 +652,42 @@ public partial class MainViewModel : ObservableObject
             .OrderBy(x => x)
             .ToList();
 
+        var buildings = _allLoanReports
+            .Select(x => x.Building)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(x => x)
+            .ToList();
+
         ReportUsers.Clear();
         ReportUsers.Add(AllUsersOption);
         foreach (var user in users)
-        {
             ReportUsers.Add(user);
-        }
 
         ReportKeys.Clear();
         ReportKeys.Add(AllKeysOption);
         foreach (var key in keys)
-        {
             ReportKeys.Add(key);
-        }
+
+        ReportBuildings.Clear();
+        ReportBuildings.Add(AllBuildingsOption);
+        foreach (var building in buildings)
+            ReportBuildings.Add(building);
 
         SelectedReportUser = ReportUsers.Contains(currentUser) ? currentUser : AllUsersOption;
         SelectedReportKey = ReportKeys.Contains(currentKey) ? currentKey : AllKeysOption;
+        SelectedReportBuilding = ReportBuildings.Contains(currentBuilding) ? currentBuilding : AllBuildingsOption;
     }
 
     private void ApplyLoanReportFilters()
     {
-        if (_allLoanReports.Count == 0)
-        {
-            LoanReports.Clear();
-            ReportStatus = "Brak danych raportu.";
-            return;
-        }
-
         IEnumerable<KeyLoanReportItem> filtered = _allLoanReports;
 
         if (ReportDateFrom.HasValue)
-        {
             filtered = filtered.Where(x => x.EventTime.Date >= ReportDateFrom.Value.Date);
-        }
 
         if (ReportDateTo.HasValue)
-        {
             filtered = filtered.Where(x => x.EventTime.Date <= ReportDateTo.Value.Date);
-        }
 
         if (!string.IsNullOrWhiteSpace(SelectedReportUser) &&
             !string.Equals(SelectedReportUser, AllUsersOption, StringComparison.Ordinal))
@@ -606,17 +701,19 @@ public partial class MainViewModel : ObservableObject
             filtered = filtered.Where(x => string.Equals(x.KeyName, SelectedReportKey, StringComparison.OrdinalIgnoreCase));
         }
 
+        if (!string.IsNullOrWhiteSpace(SelectedReportBuilding) &&
+            !string.Equals(SelectedReportBuilding, AllBuildingsOption, StringComparison.Ordinal))
+        {
+            filtered = filtered.Where(x => string.Equals(x.Building, SelectedReportBuilding, StringComparison.OrdinalIgnoreCase));
+        }
+
         var items = filtered
             .OrderByDescending(x => x.EventTime)
             .ToList();
 
         LoanReports.Clear();
         foreach (var item in items)
-        {
             LoanReports.Add(item);
-        }
-
-        ReportStatus = $"Wyświetlono {LoanReports.Count} pozycji raportu.";
     }
 
     private void SetPendingPerson(PersonResult person)
@@ -631,8 +728,9 @@ public partial class MainViewModel : ObservableObject
     {
         _pendingKey = key;
         CurrentKeyName = key.Name;
+        CurrentKeyBuilding = key.BuildingDisplay;
         CurrentKeyDescription = key.Description ?? string.Empty;
-        CurrentKeyRfidStatus = key.RfidStatus;
+        CurrentKeyRfidStatus = string.Empty;
     }
 
     private void ClearScannerPanels()
@@ -642,6 +740,7 @@ public partial class MainViewModel : ObservableObject
         EmployeeCardDisplay = string.Empty;
 
         CurrentKeyName = string.Empty;
+        CurrentKeyBuilding = string.Empty;
         CurrentKeyDescription = string.Empty;
         CurrentKeyRfidStatus = string.Empty;
     }
@@ -670,16 +769,12 @@ public partial class MainViewModel : ObservableObject
                 await Task.Delay(ScanWindow, token);
 
                 if (token.IsCancellationRequested)
-                {
                     return;
-                }
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     if (_pendingPerson is not null || _pendingKey is not null)
-                    {
                         ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
-                    }
                 });
             }
             catch (TaskCanceledException)
@@ -691,9 +786,7 @@ public partial class MainViewModel : ObservableObject
     private void CancelScanTimeout()
     {
         if (_scanTimeoutCts is null)
-        {
             return;
-        }
 
         _scanTimeoutCts.Cancel();
         _scanTimeoutCts.Dispose();
@@ -713,9 +806,7 @@ public partial class MainViewModel : ObservableObject
                 await Task.Delay(SuccessDisplayWindow, token);
 
                 if (token.IsCancellationRequested)
-                {
                     return;
-                }
 
                 Application.Current.Dispatcher.Invoke(() =>
                 {
@@ -732,9 +823,7 @@ public partial class MainViewModel : ObservableObject
     private void CancelSuccessDisplayClear()
     {
         if (_successDisplayCts is null)
-        {
             return;
-        }
 
         _successDisplayCts.Cancel();
         _successDisplayCts.Dispose();

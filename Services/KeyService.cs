@@ -24,14 +24,13 @@ public class KeyService
             SELECT
                 k.id,
                 k.name,
+                k.budynek,
+                k.zawieszka,
                 k.description,
                 r.rfid_code,
                 a.rfid_tag_id,
                 k.is_active,
-                CASE
-                    WHEN kl.id IS NOT NULL THEN 1
-                    ELSE 0
-                END AS is_issued,
+                CASE WHEN kl.id IS NOT NULL THEN 1 ELSE 0 END AS is_issued,
                 kl.issued_to_name,
                 kl.issued_at
             FROM `keys` k
@@ -44,7 +43,7 @@ public class KeyService
                 ON kl.key_id = k.id
                AND kl.returned_at IS NULL
             WHERE k.is_active = 1
-            ORDER BY k.name;
+            ORDER BY k.budynek, k.name;
             """;
 
         await using var command = new MySqlCommand(sql, connection);
@@ -52,18 +51,7 @@ public class KeyService
 
         while (await reader.ReadAsync())
         {
-            result.Add(new KeyItem
-            {
-                Id = reader.GetFieldValue<uint>(0),
-                Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-                Description = reader.IsDBNull(2) ? null : reader.GetString(2),
-                RfidTag = reader.IsDBNull(3) ? null : reader.GetString(3),
-                CurrentRfidTagId = reader.IsDBNull(4) ? null : reader.GetFieldValue<uint>(4),
-                IsActive = !reader.IsDBNull(5) && reader.GetBoolean(5),
-                IsIssued = !reader.IsDBNull(6) && reader.GetBoolean(6),
-                IssuedToName = reader.IsDBNull(7) ? null : reader.GetString(7),
-                IssuedAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8)
-            });
+            result.Add(ReadKeyItem(reader));
         }
 
         return result;
@@ -78,14 +66,13 @@ public class KeyService
             SELECT
                 k.id,
                 k.name,
+                k.budynek,
+                k.zawieszka,
                 k.description,
                 r.rfid_code,
                 a.rfid_tag_id,
                 k.is_active,
-                CASE
-                    WHEN kl.id IS NOT NULL THEN 1
-                    ELSE 0
-                END AS is_issued,
+                CASE WHEN kl.id IS NOT NULL THEN 1 ELSE 0 END AS is_issued,
                 kl.issued_to_name,
                 kl.issued_at
             FROM rfid_tags r
@@ -108,23 +95,7 @@ public class KeyService
 
         await using var reader = await command.ExecuteReaderAsync();
 
-        if (await reader.ReadAsync())
-        {
-            return new KeyItem
-            {
-                Id = reader.GetFieldValue<uint>(0),
-                Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-                Description = reader.IsDBNull(2) ? null : reader.GetString(2),
-                RfidTag = reader.IsDBNull(3) ? null : reader.GetString(3),
-                CurrentRfidTagId = reader.IsDBNull(4) ? null : reader.GetFieldValue<uint>(4),
-                IsActive = !reader.IsDBNull(5) && reader.GetBoolean(5),
-                IsIssued = !reader.IsDBNull(6) && reader.GetBoolean(6),
-                IssuedToName = reader.IsDBNull(7) ? null : reader.GetString(7),
-                IssuedAt = reader.IsDBNull(8) ? null : reader.GetDateTime(8)
-            };
-        }
-
-        return null;
+        return await reader.ReadAsync() ? ReadKeyItem(reader) : null;
     }
 
     public async Task<List<KeyLoanReportItem>> GetLoanReportAsync(
@@ -143,6 +114,7 @@ public class KeyService
                 report.event_time,
                 report.event_type,
                 report.key_name,
+                report.building,
                 report.user_name,
                 report.user_card,
                 report.rfid_code
@@ -152,14 +124,13 @@ public class KeyService
                     kl.issued_at AS event_time,
                     'Pobranie' AS event_type,
                     k.name AS key_name,
+                    k.budynek AS building,
                     kl.issued_to_name AS user_name,
                     kl.issued_to_card AS user_card,
                     r.rfid_code AS rfid_code
                 FROM key_loans kl
-                JOIN `keys` k
-                    ON k.id = kl.key_id
-                LEFT JOIN rfid_tags r
-                    ON r.id = kl.rfid_tag_id
+                JOIN `keys` k ON k.id = kl.key_id
+                LEFT JOIN rfid_tags r ON r.id = kl.rfid_tag_id
 
                 UNION ALL
 
@@ -167,14 +138,13 @@ public class KeyService
                     kl.returned_at AS event_time,
                     'Zwrot' AS event_type,
                     k.name AS key_name,
+                    k.budynek AS building,
                     kl.returned_by_name AS user_name,
                     kl.returned_by_card AS user_card,
                     r.rfid_code AS rfid_code
                 FROM key_loans kl
-                JOIN `keys` k
-                    ON k.id = kl.key_id
-                LEFT JOIN rfid_tags r
-                    ON r.id = kl.rfid_tag_id
+                JOIN `keys` k ON k.id = kl.key_id
+                LEFT JOIN rfid_tags r ON r.id = kl.rfid_tag_id
                 WHERE kl.returned_at IS NOT NULL
             ) report
             WHERE (@dateFrom IS NULL OR report.event_time >= @dateFrom)
@@ -199,16 +169,17 @@ public class KeyService
                 EventTime = reader.GetDateTime(0),
                 EventType = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
                 KeyName = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-                UserName = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                UserCard = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                RfidCode = reader.IsDBNull(5) ? null : reader.GetString(5)
+                Building = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                UserName = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                UserCard = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                RfidCode = reader.IsDBNull(6) ? null : reader.GetString(6)
             });
         }
 
         return result;
     }
 
-    public async Task<uint> InsertAsync(string name, string? description)
+    public async Task<uint> InsertAsync(string name, string? building, string? hanger, string? description)
     {
         await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -217,24 +188,20 @@ public class KeyService
         try
         {
             const string sql = """
-                INSERT INTO `keys` (name, description, is_active)
-                VALUES (@name, @description, 1);
+                INSERT INTO `keys` (name, budynek, zawieszka, description, is_active)
+                VALUES (@name, @building, @hanger, @description, 1);
                 """;
 
             await using var command = new MySqlCommand(sql, connection, (MySqlTransaction)transaction);
             command.Parameters.AddWithValue("@name", name.Trim());
+            command.Parameters.AddWithValue("@building", NormalizeText(building));
+            command.Parameters.AddWithValue("@hanger", NormalizeText(hanger));
             command.Parameters.AddWithValue("@description", NormalizeText(description));
 
             await command.ExecuteNonQueryAsync();
             var insertedId = (uint)command.LastInsertedId;
 
-            await InsertLogAsync(
-                connection,
-                (MySqlTransaction)transaction,
-                insertedId,
-                null,
-                "CREATE",
-                $"Dodano klucz: {name.Trim()}");
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, insertedId, null, "CREATE", $"Dodano klucz: {name.Trim()}");
 
             await transaction.CommitAsync();
             return insertedId;
@@ -246,7 +213,7 @@ public class KeyService
         }
     }
 
-    public async Task UpdateAsync(uint id, string name, string? description, bool removeRfid)
+    public async Task UpdateAsync(uint id, string name, string? building, string? hanger, string? description, bool removeRfid)
     {
         await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -258,6 +225,8 @@ public class KeyService
                 UPDATE `keys`
                 SET
                     name = @name,
+                    budynek = @building,
+                    zawieszka = @hanger,
                     description = @description
                 WHERE id = @id;
                 """;
@@ -265,17 +234,13 @@ public class KeyService
             await using var command = new MySqlCommand(sql, connection, (MySqlTransaction)transaction);
             command.Parameters.AddWithValue("@id", id);
             command.Parameters.AddWithValue("@name", name.Trim());
+            command.Parameters.AddWithValue("@building", NormalizeText(building));
+            command.Parameters.AddWithValue("@hanger", NormalizeText(hanger));
             command.Parameters.AddWithValue("@description", NormalizeText(description));
 
             await command.ExecuteNonQueryAsync();
 
-            await InsertLogAsync(
-                connection,
-                (MySqlTransaction)transaction,
-                id,
-                null,
-                "UPDATE",
-                $"Zaktualizowano klucz: {name.Trim()}");
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, id, null, "UPDATE", $"Zaktualizowano klucz: {name.Trim()}");
 
             await transaction.CommitAsync();
         }
@@ -351,9 +316,7 @@ public class KeyService
 
                     const string updateTagSql = """
                         UPDATE rfid_tags
-                        SET
-                            status = 'ACTIVE',
-                            updated_at = CURRENT_TIMESTAMP()
+                        SET status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP()
                         WHERE id = @rfidTagId;
                         """;
 
@@ -382,24 +345,18 @@ public class KeyService
                     var existingKeyId = Convert.ToUInt32(existingKeyIdObj);
 
                     if (existingKeyId != keyId)
-                    {
                         throw new InvalidOperationException("To RFID jest już aktywnie przypisane do innego klucza.");
-                    }
                 }
             }
 
             if (currentAssignmentId.HasValue)
             {
                 if (currentRfidTagId == rfidTagId)
-                {
                     return;
-                }
 
                 const string closeCurrentAssignmentSql = """
                     UPDATE key_rfid_assignments
-                    SET
-                        assigned_to = NOW(),
-                        unassigned_reason = 'REASSIGN'
+                    SET assigned_to = NOW(), unassigned_reason = 'REASSIGN'
                     WHERE id = @assignmentId;
                     """;
 
@@ -409,10 +366,8 @@ public class KeyService
             }
 
             const string insertAssignmentSql = """
-                INSERT INTO key_rfid_assignments
-                    (key_id, rfid_tag_id, assigned_from, assigned_by, notes)
-                VALUES
-                    (@keyId, @rfidTagId, NOW(), 'SYSTEM', NULL);
+                INSERT INTO key_rfid_assignments (key_id, rfid_tag_id, assigned_from, assigned_by, notes)
+                VALUES (@keyId, @rfidTagId, NOW(), 'SYSTEM', NULL);
                 """;
 
             await using (var insertAssignmentCommand = new MySqlCommand(insertAssignmentSql, connection, (MySqlTransaction)transaction))
@@ -424,13 +379,7 @@ public class KeyService
 
             var keyName = await GetKeyNameInternalAsync(connection, (MySqlTransaction)transaction, keyId);
 
-            await InsertLogAsync(
-                connection,
-                (MySqlTransaction)transaction,
-                keyId,
-                rfidTagId,
-                "ASSIGN_RFID",
-                $"Przypisano RFID {rfidTag.Trim()} do klucza {keyName}");
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, keyId, rfidTagId, "ASSIGN_RFID", $"Przypisano RFID {rfidTag.Trim()} do klucza {keyName}");
 
             await transaction.CommitAsync();
         }
@@ -474,15 +423,11 @@ public class KeyService
             }
 
             if (!assignmentId.HasValue)
-            {
                 throw new InvalidOperationException("Wybrany klucz nie ma przypisanego RFID.");
-            }
 
             const string closeAssignmentSql = """
                 UPDATE key_rfid_assignments
-                SET
-                    assigned_to = NOW(),
-                    unassigned_reason = 'MANUAL_REMOVE'
+                SET assigned_to = NOW(), unassigned_reason = 'MANUAL_REMOVE'
                 WHERE id = @assignmentId;
                 """;
 
@@ -494,13 +439,7 @@ public class KeyService
 
             var keyName = await GetKeyNameInternalAsync(connection, (MySqlTransaction)transaction, keyId);
 
-            await InsertLogAsync(
-                connection,
-                (MySqlTransaction)transaction,
-                keyId,
-                rfidTagId,
-                "REMOVE_RFID",
-                $"Usunięto aktywne przypisanie RFID z klucza {keyName}");
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, keyId, rfidTagId, "REMOVE_RFID", $"Usunięto aktywne przypisanie RFID z klucza {keyName}");
 
             await transaction.CommitAsync();
         }
@@ -600,10 +539,8 @@ public class KeyService
             if (openLoanId is null)
             {
                 const string insertLoanSql = """
-                    INSERT INTO key_loans
-                        (key_id, rfid_tag_id, issued_to_card, issued_to_name, issued_at)
-                    VALUES
-                        (@keyId, @rfidTagId, @issuedToCard, @issuedToName, NOW());
+                    INSERT INTO key_loans (key_id, rfid_tag_id, issued_to_card, issued_to_name, issued_at)
+                    VALUES (@keyId, @rfidTagId, @issuedToCard, @issuedToName, NOW());
                     """;
 
                 await using var insertLoanCommand = new MySqlCommand(insertLoanSql, connection, (MySqlTransaction)transaction);
@@ -614,56 +551,41 @@ public class KeyService
 
                 await insertLoanCommand.ExecuteNonQueryAsync();
 
-                await InsertLogAsync(
-                    connection,
-                    (MySqlTransaction)transaction,
-                    key.Id,
-                    activeRfidTagId,
-                    "ISSUE",
-                    $"Wydano klucz {key.Name} osobie {person.FirstName} {person.LastName}".Trim());
+                await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "ISSUE", $"Wydano klucz {key.KeyWithBuildingDisplay} osobie {person.FirstName} {person.LastName}".Trim());
 
                 await transaction.CommitAsync();
 
                 return new KeyLoanOperationResult
                 {
                     IsIssue = true,
-                    Message = $"Wydano klucz: {key.Name} -> {person.FirstName} {person.LastName}".Trim()
+                    Message = $"Wydano klucz: {key.KeyWithBuildingDisplay} -> {person.FirstName} {person.LastName}".Trim()
                 };
             }
-            else
+
+            const string returnLoanSql = """
+                UPDATE key_loans
+                SET returned_by_card = @returnedByCard,
+                    returned_by_name = @returnedByName,
+                    returned_at = NOW()
+                WHERE id = @loanId;
+                """;
+
+            await using var returnLoanCommand = new MySqlCommand(returnLoanSql, connection, (MySqlTransaction)transaction);
+            returnLoanCommand.Parameters.AddWithValue("@loanId", openLoanId.Value);
+            returnLoanCommand.Parameters.AddWithValue("@returnedByCard", person.CardNumber);
+            returnLoanCommand.Parameters.AddWithValue("@returnedByName", $"{person.FirstName} {person.LastName}".Trim());
+
+            await returnLoanCommand.ExecuteNonQueryAsync();
+
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"Zwrócono klucz {key.KeyWithBuildingDisplay}. Wydał: {issuedToName ?? "nieznany"}, zwrócił: {person.FirstName} {person.LastName}".Trim());
+
+            await transaction.CommitAsync();
+
+            return new KeyLoanOperationResult
             {
-                const string returnLoanSql = """
-                    UPDATE key_loans
-                    SET
-                        returned_by_card = @returnedByCard,
-                        returned_by_name = @returnedByName,
-                        returned_at = NOW()
-                    WHERE id = @loanId;
-                    """;
-
-                await using var returnLoanCommand = new MySqlCommand(returnLoanSql, connection, (MySqlTransaction)transaction);
-                returnLoanCommand.Parameters.AddWithValue("@loanId", openLoanId.Value);
-                returnLoanCommand.Parameters.AddWithValue("@returnedByCard", person.CardNumber);
-                returnLoanCommand.Parameters.AddWithValue("@returnedByName", $"{person.FirstName} {person.LastName}".Trim());
-
-                await returnLoanCommand.ExecuteNonQueryAsync();
-
-                await InsertLogAsync(
-                    connection,
-                    (MySqlTransaction)transaction,
-                    key.Id,
-                    activeRfidTagId,
-                    "RETURN",
-                    $"Zwrócono klucz {key.Name}. Wydał: {issuedToName ?? "nieznany"}, zwrócił: {person.FirstName} {person.LastName}".Trim());
-
-                await transaction.CommitAsync();
-
-                return new KeyLoanOperationResult
-                {
-                    IsReturn = true,
-                    Message = $"Zwrócono klucz: {key.Name} <- {person.FirstName} {person.LastName}".Trim()
-                };
-            }
+                IsReturn = true,
+                Message = $"Zwrócono klucz: {key.KeyWithBuildingDisplay} <- {person.FirstName} {person.LastName}".Trim()
+            };
         }
         catch
         {
@@ -672,13 +594,25 @@ public class KeyService
         }
     }
 
-    private static async Task InsertLogAsync(
-        MySqlConnection connection,
-        MySqlTransaction transaction,
-        uint keyId,
-        uint? rfidTagId,
-        string actionType,
-        string? actionDetails)
+    private static KeyItem ReadKeyItem(MySqlDataReader reader)
+    {
+        return new KeyItem
+        {
+            Id = reader.GetFieldValue<uint>(0),
+            Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+            Building = reader.IsDBNull(2) ? null : reader.GetString(2),
+            Hanger = reader.IsDBNull(3) ? null : reader.GetString(3),
+            Description = reader.IsDBNull(4) ? null : reader.GetString(4),
+            RfidTag = reader.IsDBNull(5) ? null : reader.GetString(5),
+            CurrentRfidTagId = reader.IsDBNull(6) ? null : reader.GetFieldValue<uint>(6),
+            IsActive = !reader.IsDBNull(7) && reader.GetBoolean(7),
+            IsIssued = !reader.IsDBNull(8) && reader.GetBoolean(8),
+            IssuedToName = reader.IsDBNull(9) ? null : reader.GetString(9),
+            IssuedAt = reader.IsDBNull(10) ? null : reader.GetDateTime(10)
+        };
+    }
+
+    private static async Task InsertLogAsync(MySqlConnection connection, MySqlTransaction transaction, uint keyId, uint? rfidTagId, string actionType, string? actionDetails)
     {
         const string sql = """
             INSERT INTO key_logs (key_id, rfid_tag_id, action_type, action_details)
@@ -725,31 +659,16 @@ public class KeyService
 
         var result = await command.ExecuteScalarAsync();
 
-        if (result is null || result == DBNull.Value)
-        {
-            return null;
-        }
-
-        return Convert.ToUInt32(result);
+        return result is null || result == DBNull.Value
+            ? null
+            : Convert.ToUInt32(result);
     }
 
-    private static object ToDbValue(uint? value)
-    {
-        return value.HasValue ? value.Value : DBNull.Value;
-    }
+    private static object ToDbValue(uint? value) => value.HasValue ? value.Value : DBNull.Value;
 
-    private static object ToDbValue(DateTime? value)
-    {
-        return value.HasValue ? value.Value : DBNull.Value;
-    }
+    private static object ToDbValue(DateTime? value) => value.HasValue ? value.Value : DBNull.Value;
 
-    private static object NormalizeText(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
-    }
+    private static object NormalizeText(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
 
-    private static object NormalizeFilter(string? value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
-    }
+    private static object NormalizeFilter(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
 }
