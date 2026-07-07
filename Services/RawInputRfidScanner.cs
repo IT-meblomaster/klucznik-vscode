@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -33,6 +33,7 @@ public sealed class RawInputRfidScanner : IDisposable
     private readonly Window _window;
     private readonly string _vid;
     private readonly string _pid;
+    private readonly string _sid;
     private readonly StringBuilder _scanBuffer = new();
     private readonly Dictionary<IntPtr, bool> _deviceMatchCache = new();
 
@@ -44,11 +45,12 @@ public sealed class RawInputRfidScanner : IDisposable
 
     public bool IsRegistered { get; private set; }
 
-    public RawInputRfidScanner(Window window, string vid, string pid)
+    public RawInputRfidScanner(Window window, string vid, string pid, string sid = "")
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         _vid = NormalizeHardwareIdPart(vid);
         _pid = NormalizeHardwareIdPart(pid);
+        _sid = NormalizeHardwareIdPart(sid);
 
         _window.SourceInitialized += Window_SourceInitialized;
         _window.Closed += Window_Closed;
@@ -58,7 +60,7 @@ public sealed class RawInputRfidScanner : IDisposable
 
     private static string NormalizeHardwareIdPart(string value)
     {
-        return value.Trim().ToUpperInvariant();
+        return (value ?? string.Empty).Trim().ToUpperInvariant();
     }
 
     private void Window_SourceInitialized(object? sender, EventArgs e)
@@ -171,7 +173,8 @@ public sealed class RawInputRfidScanner : IDisposable
         var deviceName = GetDeviceName(deviceHandle);
 
         var isMatch = deviceName.Contains(_vid, StringComparison.OrdinalIgnoreCase)
-            && deviceName.Contains(_pid, StringComparison.OrdinalIgnoreCase);
+            && deviceName.Contains(_pid, StringComparison.OrdinalIgnoreCase)
+            && (string.IsNullOrWhiteSpace(_sid) || deviceName.Contains(_sid, StringComparison.OrdinalIgnoreCase));
 
         _deviceMatchCache[deviceHandle] = isMatch;
         return isMatch;

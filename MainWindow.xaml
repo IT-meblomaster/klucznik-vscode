@@ -1,4 +1,4 @@
-﻿<Window x:Class="Klucznik.MainWindow"
+<Window x:Class="Klucznik.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
@@ -395,7 +395,7 @@
                                 <RowDefinition Height="*"/>
                             </Grid.RowDefinitions>
 
-                            <TextBlock Text="Raport wypoĹĽyczeĹ„" Style="{StaticResource AppSectionTitleStyle}"/>
+                            <TextBlock Text="Raport wypożyczeń" Style="{StaticResource AppSectionTitleStyle}"/>
 
                             <DataGrid Grid.Row="1"
                                       ItemsSource="{Binding LoanReports}"
@@ -416,7 +416,7 @@
                                     <DataGridTextColumn Header="Budynek"
                                                         Binding="{Binding Building}"
                                                         Width="140"/>
-                                    <DataGridTextColumn Header="UĹĽytkownik"
+                                    <DataGridTextColumn Header="Użytkownik"
                                                         Binding="{Binding UserName}"
                                                         Width="*"/>
                                 </DataGrid.Columns>
@@ -469,7 +469,7 @@
                                         Style="{StaticResource MaterialDesignOutlinedButton}"
                                         Click="EditKey_Click"
                                         IsEnabled="{Binding CanEditOrDeleteKey}"/>
-                                <Button Content="UsuĹ„"
+                                <Button Content="Usuń"
                                         Width="100"
                                         Height="38"
                                         Margin="0,0,16,8"
@@ -483,7 +483,7 @@
                                         Style="{StaticResource MaterialDesignOutlinedButton}"
                                         Click="AssignRfid_Click"
                                         IsEnabled="{Binding CanAssignRfid}"/>
-                                <Button Content="UsuĹ„ RFID"
+                                <Button Content="Usuń RFID"
                                         Width="120"
                                         Height="38"
                                         Margin="0,0,0,8"
@@ -619,7 +619,7 @@
                                          Grid.Column="1"
                                          Height="46"
                                          Margin="12,0,0,12"
-                                         materialDesign:HintAssist.Hint="UĹĽytkownik"
+                                         materialDesign:HintAssist.Hint="Użytkownik"
                                          Text="{Binding OracleSettings.User, UpdateSourceTrigger=PropertyChanged}"
                                          IsReadOnly="{Binding OracleSettings.IsReadOnly}"/>
 
@@ -696,7 +696,7 @@
                                          Grid.Column="1"
                                          Height="46"
                                          Margin="12,0,0,12"
-                                         materialDesign:HintAssist.Hint="UĹĽytkownik"
+                                         materialDesign:HintAssist.Hint="Użytkownik"
                                          Text="{Binding MySqlSettings.User, UpdateSourceTrigger=PropertyChanged}"
                                          IsReadOnly="{Binding MySqlSettings.IsReadOnly}"/>
 
@@ -744,6 +744,63 @@
                             </Grid>
                         </Border>
 
+
+                        <Border Style="{StaticResource AppCardStyle}" Margin="0,0,0,18">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <TextBlock Grid.ColumnSpan="4"
+                                           Text="Czytnik RFID / klawiatura"
+                                           Style="{StaticResource AppSectionTitleStyle}"/>
+
+                                <TextBox Grid.Row="1"
+                                         Grid.Column="0"
+                                         Height="46"
+                                         Margin="0,0,12,12"
+                                         materialDesign:HintAssist.Hint="VID"
+                                         Text="{Binding ScannerSettings.Vid, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <TextBox Grid.Row="1"
+                                         Grid.Column="1"
+                                         Height="46"
+                                         Margin="12,0,12,12"
+                                         materialDesign:HintAssist.Hint="PID"
+                                         Text="{Binding ScannerSettings.Pid, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <TextBox Grid.Row="1"
+                                         Grid.Column="2"
+                                         Height="46"
+                                         Margin="12,0,12,12"
+                                         materialDesign:HintAssist.Hint="SID / fragment nazwy urządzenia"
+                                         Text="{Binding ScannerSettings.Sid, UpdateSourceTrigger=PropertyChanged}"/>
+
+                                <Button Grid.Row="1"
+                                        Grid.Column="3"
+                                        Content="Zapisz"
+                                        Width="110"
+                                        Height="38"
+                                        Margin="12,4,0,12"
+                                        VerticalAlignment="Top"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Click="SaveScannerSettings_Click"/>
+
+                                <TextBlock Grid.Row="2"
+                                           Grid.ColumnSpan="4"
+                                           Text="Po zmianie VID/PID/SID aplikacja przełączy czytnik od razu. SID jest opcjonalny — użyj go tylko wtedy, gdy kilka urządzeń ma ten sam VID/PID."
+                                           Style="{StaticResource AppMutedTextStyle}"/>
+                            </Grid>
+                        </Border>
+
                         <TextBlock Text="{Binding SettingsStatus}"
                                    Style="{StaticResource AppMutedTextStyle}"
                                    Margin="0,4,0,0"/>
@@ -754,4 +811,3 @@
         </TabControl>
     </Grid>
 </Window>
-

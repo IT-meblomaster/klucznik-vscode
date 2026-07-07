@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
@@ -28,19 +28,19 @@ public partial class MainWindow : Window
         var vm = new MainViewModel();
         DataContext = vm;
 
-        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid);
+        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid, vm.ScannerSettings.Sid);
 
         Loaded += MainWindow_Loaded;
         MainTabs.SelectionChanged += MainTabs_SelectionChanged;
         Closed += MainWindow_Closed;
     }
 
-    private void CreateRawInputScanner(string vid, string pid)
+    private void CreateRawInputScanner(string vid, string pid, string? sid)
     {
         _rawInputScanner?.CodeScanned -= RawInputScanner_CodeScanned;
         _rawInputScanner?.Dispose();
 
-        _rawInputScanner = new RawInputRfidScanner(this, vid, pid);
+        _rawInputScanner = new RawInputRfidScanner(this, vid, pid, sid ?? string.Empty);
         _rawInputScanner.CodeScanned += RawInputScanner_CodeScanned;
     }
 
@@ -450,7 +450,7 @@ public partial class MainWindow : Window
             return;
 
         vm.SaveScannerSettings();
-        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid);
+        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid, vm.ScannerSettings.Sid);
         Keyboard.Focus(this);
     }
 

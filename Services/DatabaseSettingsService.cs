@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -34,7 +34,6 @@ public class DatabaseSettingsService
     public ScannerSettingsSection LoadScannerSettings()
     {
         var root = LoadJsonObject();
-
         var scanner = root["Scanner"]?.AsObject();
 
         if (scanner is null)
@@ -44,11 +43,13 @@ public class DatabaseSettingsService
 
         var vid = scanner["Vid"]?.GetValue<string>() ?? "VID_08FF";
         var pid = scanner["Pid"]?.GetValue<string>() ?? "PID_0009";
+        var sid = scanner["Sid"]?.GetValue<string>() ?? string.Empty;
 
         return new ScannerSettingsSection
         {
             Vid = NormalizeVidPid(vid, "VID_"),
-            Pid = NormalizeVidPid(pid, "PID_")
+            Pid = NormalizeVidPid(pid, "PID_"),
+            Sid = sid.Trim().ToUpperInvariant()
         };
     }
 
@@ -68,7 +69,7 @@ public class DatabaseSettingsService
         }
         else
         {
-            throw new InvalidOperationException($"NieobsĹ‚ugiwany klucz konfiguracji: {section.ConfigKey}");
+            throw new InvalidOperationException($"Nieobsługiwany klucz konfiguracji: {section.ConfigKey}");
         }
 
         SaveJsonObject(root);
@@ -88,6 +89,7 @@ public class DatabaseSettingsService
 
         scanner["Vid"] = NormalizeVidPid(settings.Vid, "VID_");
         scanner["Pid"] = NormalizeVidPid(settings.Pid, "PID_");
+        scanner["Sid"] = (settings.Sid ?? string.Empty).Trim().ToUpperInvariant();
 
         SaveJsonObject(root);
     }
@@ -101,7 +103,7 @@ public class DatabaseSettingsService
         var node = JsonNode.Parse(json)?.AsObject();
 
         if (node is null)
-            throw new InvalidOperationException("Nie udaĹ‚o siÄ™ odczytaÄ‡ pliku appsettings.json.");
+            throw new InvalidOperationException("Nie udało się odczytać pliku appsettings.json.");
 
         return node;
     }
