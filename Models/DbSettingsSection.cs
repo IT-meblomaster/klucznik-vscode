@@ -1,6 +1,6 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace MojaAplikacja.Models;
+namespace Klucznik.Models;
 
 public partial class DbSettingsSection : ObservableObject
 {

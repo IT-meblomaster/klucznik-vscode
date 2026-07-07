@@ -3,10 +3,10 @@ using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using MojaAplikacja.Services;
-using MojaAplikacja.ViewModels;
+using Klucznik.Services;
+using Klucznik.ViewModels;
 
-namespace MojaAplikacja;
+namespace Klucznik;
 
 public partial class MainWindow : Window
 {
@@ -19,18 +19,36 @@ public partial class MainWindow : Window
     private DateTime _lastScanCharAt = DateTime.MinValue;
     private static readonly TimeSpan ScanGapReset = TimeSpan.FromMilliseconds(250);
 
-    private readonly RawInputRfidScanner _rawInputScanner;
+    private RawInputRfidScanner? _rawInputScanner;
 
     public MainWindow()
     {
         InitializeComponent();
-        DataContext = new MainViewModel();
 
-        _rawInputScanner = new RawInputRfidScanner(this, "VID_08FF", "PID_0009");
-        _rawInputScanner.CodeScanned += RawInputScanner_CodeScanned;
+        var vm = new MainViewModel();
+        DataContext = vm;
+
+        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid);
 
         Loaded += MainWindow_Loaded;
         MainTabs.SelectionChanged += MainTabs_SelectionChanged;
+        Closed += MainWindow_Closed;
+    }
+
+    private void CreateRawInputScanner(string vid, string pid)
+    {
+        _rawInputScanner?.CodeScanned -= RawInputScanner_CodeScanned;
+        _rawInputScanner?.Dispose();
+
+        _rawInputScanner = new RawInputRfidScanner(this, vid, pid);
+        _rawInputScanner.CodeScanned += RawInputScanner_CodeScanned;
+    }
+
+    private void MainWindow_Closed(object? sender, EventArgs e)
+    {
+        _rawInputScanner?.CodeScanned -= RawInputScanner_CodeScanned;
+        _rawInputScanner?.Dispose();
+        _rawInputScanner = null;
     }
 
     private async void RawInputScanner_CodeScanned(object? sender, string code)
@@ -210,7 +228,7 @@ public partial class MainWindow : Window
 
     private void Window_PreviewTextInput(object sender, TextCompositionEventArgs e)
     {
-        if (_rawInputScanner.IsRegistered)
+        if (_rawInputScanner is not null && _rawInputScanner.IsRegistered)
             return;
 
         if (IsEditingTextInput())
@@ -233,7 +251,7 @@ public partial class MainWindow : Window
 
     private async void Window_PreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (_rawInputScanner.IsRegistered)
+        if (_rawInputScanner is not null && _rawInputScanner.IsRegistered)
             return;
 
         if (IsEditingTextInput())
@@ -424,6 +442,16 @@ public partial class MainWindow : Window
             vm.CancelEditMySql();
             SyncPasswordBoxesFromViewModel();
         }
+    }
+
+    private void SaveScannerSettings_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        vm.SaveScannerSettings();
+        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid);
+        Keyboard.Focus(this);
     }
 
     private void OraclePasswordBox_PasswordChanged(object sender, RoutedEventArgs e)

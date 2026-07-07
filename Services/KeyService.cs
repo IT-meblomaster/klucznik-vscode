@@ -1,7 +1,7 @@
-using MojaAplikacja.Models;
+﻿using Klucznik.Models;
 using MySqlConnector;
 
-namespace MojaAplikacja.Services;
+namespace Klucznik.Services;
 
 public class KeyService
 {
@@ -345,7 +345,7 @@ public class KeyService
                     var existingKeyId = Convert.ToUInt32(existingKeyIdObj);
 
                     if (existingKeyId != keyId)
-                        throw new InvalidOperationException("To RFID jest już aktywnie przypisane do innego klucza.");
+                        throw new InvalidOperationException("To RFID jest juĹĽ aktywnie przypisane do innego klucza.");
                 }
             }
 
@@ -439,7 +439,7 @@ public class KeyService
 
             var keyName = await GetKeyNameInternalAsync(connection, (MySqlTransaction)transaction, keyId);
 
-            await InsertLogAsync(connection, (MySqlTransaction)transaction, keyId, rfidTagId, "REMOVE_RFID", $"Usunięto aktywne przypisanie RFID z klucza {keyName}");
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, keyId, rfidTagId, "REMOVE_RFID", $"UsuniÄ™to aktywne przypisanie RFID z klucza {keyName}");
 
             await transaction.CommitAsync();
         }
@@ -577,14 +577,14 @@ public class KeyService
 
             await returnLoanCommand.ExecuteNonQueryAsync();
 
-            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"Zwrócono klucz {key.KeyWithBuildingDisplay}. Wydał: {issuedToName ?? "nieznany"}, zwrócił: {person.FirstName} {person.LastName}".Trim());
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"ZwrĂłcono klucz {key.KeyWithBuildingDisplay}. WydaĹ‚: {issuedToName ?? "nieznany"}, zwrĂłciĹ‚: {person.FirstName} {person.LastName}".Trim());
 
             await transaction.CommitAsync();
 
             return new KeyLoanOperationResult
             {
                 IsReturn = true,
-                Message = $"Zwrócono klucz: {key.KeyWithBuildingDisplay} <- {person.FirstName} {person.LastName}".Trim()
+                Message = $"ZwrĂłcono klucz: {key.KeyWithBuildingDisplay} <- {person.FirstName} {person.LastName}".Trim()
             };
         }
         catch

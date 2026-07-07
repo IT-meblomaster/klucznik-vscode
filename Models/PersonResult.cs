@@ -1,4 +1,4 @@
-namespace MojaAplikacja.Models;
+﻿namespace Klucznik.Models;
 
 public class PersonResult
 {

@@ -1,6 +1,6 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 
-namespace MojaAplikacja.Models;
+namespace Klucznik.Models;
 
 public class InventoryKeyGroup
 {

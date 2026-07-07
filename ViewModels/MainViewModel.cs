@@ -1,11 +1,11 @@
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using MojaAplikacja.Models;
-using MojaAplikacja.Services;
+using Klucznik.Models;
+using Klucznik.Services;
 using System.Collections.ObjectModel;
 using System.Windows;
 
-namespace MojaAplikacja.ViewModels;
+namespace Klucznik.ViewModels;
 
 public partial class MainViewModel : ObservableObject
 {
@@ -35,6 +35,7 @@ public partial class MainViewModel : ObservableObject
     public MainViewModel()
     {
         LoadDatabaseSettings();
+        LoadScannerSettings();
         LoadAdminPasswordStatus();
 
         ReportUsers.Add(AllUsersOption);
@@ -71,7 +72,7 @@ public partial class MainViewModel : ObservableObject
     private string currentKeyRfidStatus = string.Empty;
 
     [ObservableProperty]
-    private string status = "Przyłóż kartę pracownika lub klucza.";
+    private string status = "PrzyĹ‚ĂłĹĽ kartÄ™ pracownika lub klucza.";
 
     [ObservableProperty]
     private string keysStatus = "Gotowe.";
@@ -93,6 +94,9 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private DbSettingsSection mySqlSettings = new();
+
+    [ObservableProperty]
+    private ScannerSettingsSection scannerSettings = new();
 
     [ObservableProperty]
     private string settingsStatus = "Gotowe.";
@@ -167,7 +171,36 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            SettingsStatus = $"Błąd wczytywania ustawień: {ex.Message}";
+            SettingsStatus = $"BĹ‚Ä…d wczytywania ustawieĹ„: {ex.Message}";
+        }
+    }
+
+    public void LoadScannerSettings()
+    {
+        try
+        {
+            ScannerSettings = _databaseSettingsService.LoadScannerSettings();
+        }
+        catch (Exception ex)
+        {
+            ScannerSettings = new ScannerSettingsSection();
+            SettingsStatus = $"BĹ‚Ä…d wczytywania ustawieĹ„ czytnika: {ex.Message}";
+        }
+    }
+
+    public void SaveScannerSettings()
+    {
+        try
+        {
+            ScannerSettings.Vid = NormalizeVidPid(ScannerSettings.Vid, "VID_");
+            ScannerSettings.Pid = NormalizeVidPid(ScannerSettings.Pid, "PID_");
+
+            _databaseSettingsService.SaveScannerSettings(ScannerSettings);
+            SettingsStatus = "Zapisano ustawienia czytnika. Uruchom aplikacjÄ™ ponownie.";
+        }
+        catch (Exception ex)
+        {
+            SettingsStatus = $"BĹ‚Ä…d zapisu ustawieĹ„ czytnika: {ex.Message}";
         }
     }
 
@@ -238,14 +271,14 @@ public partial class MainViewModel : ObservableObject
     {
         _oracleSnapshot = OracleSettings.CreateSnapshot();
         OracleSettings.IsEditing = true;
-        SettingsStatus = "Edycja ustawień Oracle.";
+        SettingsStatus = "Edycja ustawieĹ„ Oracle.";
     }
 
     public void BeginEditMySql()
     {
         _mySqlSnapshot = MySqlSettings.CreateSnapshot();
         MySqlSettings.IsEditing = true;
-        SettingsStatus = "Edycja ustawień mySQL.";
+        SettingsStatus = "Edycja ustawieĹ„ mySQL.";
     }
 
     public void CancelEditOracle()
@@ -277,7 +310,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            SettingsStatus = $"Błąd zapisu Oracle: {ex.Message}";
+            SettingsStatus = $"BĹ‚Ä…d zapisu Oracle: {ex.Message}";
         }
     }
 
@@ -292,7 +325,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            SettingsStatus = $"Błąd zapisu mySQL: {ex.Message}";
+            SettingsStatus = $"BĹ‚Ä…d zapisu mySQL: {ex.Message}";
         }
     }
 
@@ -327,7 +360,7 @@ public partial class MainViewModel : ObservableObject
             SelectedReportKey = AllKeysOption;
             SelectedReportBuilding = AllBuildingsOption;
 
-            ReportStatus = $"Błąd raportu: {ex.Message}";
+            ReportStatus = $"BĹ‚Ä…d raportu: {ex.Message}";
         }
     }
 
@@ -366,7 +399,7 @@ public partial class MainViewModel : ObservableObject
             return;
 
         if (_firstScanAt.HasValue && DateTime.Now - _firstScanAt.Value > ScanWindow)
-            ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
+            ClearScannerState("Przekroczono 10 sekund. WyczyĹ›ciĹ‚em dane.");
 
         var person = await _oracleService.FindPersonByCardAsync(code);
         var key = await _keyService.GetKeyByRfidAsync(code);
@@ -379,7 +412,7 @@ public partial class MainViewModel : ObservableObject
 
         if (person is not null && key is not null)
         {
-            Status = $"Skan {code} pasuje jednocześnie do pracownika i klucza.";
+            Status = $"Skan {code} pasuje jednoczeĹ›nie do pracownika i klucza.";
             return;
         }
 
@@ -455,7 +488,7 @@ public partial class MainViewModel : ObservableObject
             }
             catch (Exception ex)
             {
-                ClearScannerState($"Błąd operacji: {ex.Message}");
+                ClearScannerState($"BĹ‚Ä…d operacji: {ex.Message}");
             }
         }
     }
@@ -483,7 +516,7 @@ public partial class MainViewModel : ObservableObject
         {
             Keys.Clear();
             InventoryGroups.Clear();
-            KeysStatus = $"Błąd MariaDB: {ex.Message}";
+            KeysStatus = $"BĹ‚Ä…d MariaDB: {ex.Message}";
         }
     }
 
@@ -497,7 +530,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            KeysStatus = $"Błąd dodawania: {ex.Message}";
+            KeysStatus = $"BĹ‚Ä…d dodawania: {ex.Message}";
         }
     }
 
@@ -512,7 +545,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            KeysStatus = $"Błąd edycji: {ex.Message}";
+            KeysStatus = $"BĹ‚Ä…d edycji: {ex.Message}";
         }
     }
 
@@ -528,13 +561,13 @@ public partial class MainViewModel : ObservableObject
         {
             var id = SelectedKey.Id;
             await _keyService.DeleteAsync(id);
-            KeysStatus = "Usunięto klucz.";
+            KeysStatus = "UsuniÄ™to klucz.";
             SelectedKey = null;
             await RefreshKeysAsync();
         }
         catch (Exception ex)
         {
-            KeysStatus = $"Błąd usuwania: {ex.Message}";
+            KeysStatus = $"BĹ‚Ä…d usuwania: {ex.Message}";
         }
     }
 
@@ -573,7 +606,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            KeysStatus = $"Błąd przypisywania RFID: {ex.Message}";
+            KeysStatus = $"BĹ‚Ä…d przypisywania RFID: {ex.Message}";
         }
     }
 
@@ -595,13 +628,13 @@ public partial class MainViewModel : ObservableObject
         {
             var id = SelectedKey.Id;
             await _keyService.RemoveRfidAsync(id);
-            KeysStatus = $"Usunięto RFID z klucza: {SelectedKey.Name}";
+            KeysStatus = $"UsuniÄ™to RFID z klucza: {SelectedKey.Name}";
             await RefreshKeysAsync();
             SelectedKey = Keys.FirstOrDefault(x => x.Id == id);
         }
         catch (Exception ex)
         {
-            KeysStatus = $"Błąd usuwania RFID: {ex.Message}";
+            KeysStatus = $"BĹ‚Ä…d usuwania RFID: {ex.Message}";
         }
     }
 
@@ -774,7 +807,7 @@ public partial class MainViewModel : ObservableObject
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     if (_pendingPerson is not null || _pendingKey is not null)
-                        ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
+                        ClearScannerState("Przekroczono 10 sekund. WyczyĹ›ciĹ‚em dane.");
                 });
             }
             catch (TaskCanceledException)
@@ -811,7 +844,7 @@ public partial class MainViewModel : ObservableObject
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     ClearScannerPanels();
-                    Status = "Przyłóż kartę pracownika lub klucza.";
+                    Status = "PrzyĹ‚ĂłĹĽ kartÄ™ pracownika lub klucza.";
                 });
             }
             catch (TaskCanceledException)
@@ -837,5 +870,18 @@ public partial class MainViewModel : ObservableObject
             Timestamp = DateTime.Now,
             Message = message
         });
+    }
+
+    private static string NormalizeVidPid(string value, string prefix)
+    {
+        var normalized = (value ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(normalized))
+            return prefix == "VID_" ? "VID_08FF" : "PID_0009";
+
+        if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            normalized = prefix + normalized;
+
+        return normalized;
     }
 }

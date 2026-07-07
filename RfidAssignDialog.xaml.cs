@@ -1,7 +1,7 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Input;
 
-namespace MojaAplikacja;
+namespace Klucznik;
 
 public partial class RfidAssignDialog : Window
 {

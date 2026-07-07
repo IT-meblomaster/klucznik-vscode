@@ -1,6 +1,6 @@
-using System.Windows;
+﻿using System.Windows;
 
-namespace MojaAplikacja;
+namespace Klucznik;
 
 public partial class KeyEditDialog : Window
 {

@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Interop;
 
-namespace MojaAplikacja.Services;
+namespace Klucznik.Services;
 
 public sealed class RawInputRfidScanner : IDisposable
 {
@@ -52,6 +52,8 @@ public sealed class RawInputRfidScanner : IDisposable
 
         _window.SourceInitialized += Window_SourceInitialized;
         _window.Closed += Window_Closed;
+
+        TryAttachAndRegister();
     }
 
     private static string NormalizeHardwareIdPart(string value)
@@ -61,6 +63,14 @@ public sealed class RawInputRfidScanner : IDisposable
 
     private void Window_SourceInitialized(object? sender, EventArgs e)
     {
+        TryAttachAndRegister();
+    }
+
+    private void TryAttachAndRegister()
+    {
+        if (_disposed || IsRegistered)
+            return;
+
         var helper = new WindowInteropHelper(_window);
         var hwnd = helper.Handle;
 
@@ -68,6 +78,7 @@ public sealed class RawInputRfidScanner : IDisposable
             return;
 
         _source = HwndSource.FromHwnd(hwnd);
+        _source?.RemoveHook(WndProc);
         _source?.AddHook(WndProc);
 
         var devices = new[]
@@ -268,6 +279,7 @@ public sealed class RawInputRfidScanner : IDisposable
             return;
 
         _disposed = true;
+        IsRegistered = false;
 
         _window.SourceInitialized -= Window_SourceInitialized;
         _window.Closed -= Window_Closed;
@@ -277,6 +289,9 @@ public sealed class RawInputRfidScanner : IDisposable
             _source.RemoveHook(WndProc);
             _source = null;
         }
+
+        _deviceMatchCache.Clear();
+        ResetScanBuffer();
     }
 
     [StructLayout(LayoutKind.Sequential)]

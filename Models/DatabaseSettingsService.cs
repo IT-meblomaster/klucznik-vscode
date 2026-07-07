@@ -1,11 +1,11 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using MojaAplikacja.Models;
+using Klucznik.Models;
 
-namespace MojaAplikacja.Services;
+namespace Klucznik.Services;
 
 public class DatabaseSettingsService
 {
@@ -31,6 +31,27 @@ public class DatabaseSettingsService
         return (ParseOracle(oracleRaw), ParseMariaDb(mariaDbRaw));
     }
 
+    public ScannerSettingsSection LoadScannerSettings()
+    {
+        var root = LoadJsonObject();
+
+        var scanner = root["Scanner"]?.AsObject();
+
+        if (scanner is null)
+        {
+            return new ScannerSettingsSection();
+        }
+
+        var vid = scanner["Vid"]?.GetValue<string>() ?? "VID_08FF";
+        var pid = scanner["Pid"]?.GetValue<string>() ?? "PID_0009";
+
+        return new ScannerSettingsSection
+        {
+            Vid = NormalizeVidPid(vid, "VID_"),
+            Pid = NormalizeVidPid(pid, "PID_")
+        };
+    }
+
     public void Save(DbSettingsSection section)
     {
         var root = LoadJsonObject();
@@ -47,15 +68,28 @@ public class DatabaseSettingsService
         }
         else
         {
-            throw new InvalidOperationException($"Nieobsługiwany klucz konfiguracji: {section.ConfigKey}");
+            throw new InvalidOperationException($"NieobsĹ‚ugiwany klucz konfiguracji: {section.ConfigKey}");
         }
 
-        var json = root.ToJsonString(new JsonSerializerOptions
-        {
-            WriteIndented = true
-        });
+        SaveJsonObject(root);
+    }
 
-        File.WriteAllText(_settingsPath, json);
+    public void SaveScannerSettings(ScannerSettingsSection settings)
+    {
+        var root = LoadJsonObject();
+
+        var scanner = root["Scanner"]?.AsObject();
+
+        if (scanner is null)
+        {
+            scanner = new JsonObject();
+            root["Scanner"] = scanner;
+        }
+
+        scanner["Vid"] = NormalizeVidPid(settings.Vid, "VID_");
+        scanner["Pid"] = NormalizeVidPid(settings.Pid, "PID_");
+
+        SaveJsonObject(root);
     }
 
     private JsonObject LoadJsonObject()
@@ -67,9 +101,19 @@ public class DatabaseSettingsService
         var node = JsonNode.Parse(json)?.AsObject();
 
         if (node is null)
-            throw new InvalidOperationException("Nie udało się odczytać pliku appsettings.json.");
+            throw new InvalidOperationException("Nie udaĹ‚o siÄ™ odczytaÄ‡ pliku appsettings.json.");
 
         return node;
+    }
+
+    private void SaveJsonObject(JsonObject root)
+    {
+        var json = root.ToJsonString(new JsonSerializerOptions
+        {
+            WriteIndented = true
+        });
+
+        File.WriteAllText(_settingsPath, json);
     }
 
     private static DbSettingsSection ParseOracle(string connectionString)
@@ -146,5 +190,18 @@ public class DatabaseSettingsService
             return source[startIndex..];
 
         return source[startIndex..endIndex];
+    }
+
+    private static string NormalizeVidPid(string value, string prefix)
+    {
+        var normalized = (value ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (string.IsNullOrWhiteSpace(normalized))
+            return prefix == "VID_" ? "VID_08FF" : "PID_0009";
+
+        if (!normalized.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            normalized = prefix + normalized;
+
+        return normalized;
     }
 }

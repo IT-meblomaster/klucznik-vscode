@@ -1,6 +1,6 @@
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 
-namespace MojaAplikacja.Services;
+namespace Klucznik.Services;
 
 public class DatabaseConfig
 {

@@ -1,10 +1,10 @@
-using System;
+﻿using System;
 using System.Security.Cryptography;
 using System.Text.Json;
-using MojaAplikacja.Models;
+using Klucznik.Models;
 using MySqlConnector;
 
-namespace MojaAplikacja.Services;
+namespace Klucznik.Services;
 
 public class AdminPasswordService
 {
@@ -59,7 +59,7 @@ public class AdminPasswordService
     public void SavePassword(string password)
     {
         if (string.IsNullOrWhiteSpace(password))
-            throw new InvalidOperationException("Hasło nie może być puste.");
+            throw new InvalidOperationException("Hasło nie moĹĽe byÄ‡ puste.");
 
         EnsureSettingsTableExists();
 

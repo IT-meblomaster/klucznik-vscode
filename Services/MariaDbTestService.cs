@@ -1,6 +1,6 @@
-using MySqlConnector;
+﻿using MySqlConnector;
 
-namespace MojaAplikacja.Services;
+namespace Klucznik.Services;
 
 public class MariaDbTestService
 {

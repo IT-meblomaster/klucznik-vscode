@@ -1,8 +1,8 @@
-using Microsoft.Extensions.Configuration;
-using MojaAplikacja.Models;
+﻿using Microsoft.Extensions.Configuration;
+using Klucznik.Models;
 using Oracle.ManagedDataAccess.Client;
 
-namespace MojaAplikacja.Services;
+namespace Klucznik.Services;
 
 public class OracleTestService
 {
