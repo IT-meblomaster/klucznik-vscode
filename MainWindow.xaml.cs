@@ -12,6 +12,7 @@ public partial class MainWindow : Window
 {
     private bool _keysLoadedOnce = false;
     private bool _reportsLoadedOnce = false;
+    private bool _buildingsLoadedOnce = false;
     private bool _adminUnlocked = false;
     private bool _isChangingTabProgrammatically = false;
 
@@ -163,6 +164,9 @@ public partial class MainWindow : Window
 
     private async void MainTabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (!ReferenceEquals(e.OriginalSource, MainTabs))
+            return;
+
         if (_isChangingTabProgrammatically)
             return;
 
@@ -177,17 +181,6 @@ public partial class MainWindow : Window
             return;
         }
 
-
-        if (header == "Budynki")
-        {
-            if (DataContext is MainViewModel vm)
-                await vm.RefreshBuildingsAsync();
-
-            return;
-        }
-
-
-
         if (header == "Klucze" || header == "Inwentaryzacja")
         {
             if (_keysLoadedOnce)
@@ -197,6 +190,20 @@ public partial class MainWindow : Window
             {
                 _keysLoadedOnce = true;
                 await vm.RefreshKeysAsync();
+            }
+
+            return;
+        }
+
+        if (header == "Budynki")
+        {
+            if (_buildingsLoadedOnce)
+                return;
+
+            if (DataContext is MainViewModel vm)
+            {
+                _buildingsLoadedOnce = true;
+                await vm.RefreshBuildingsAsync();
             }
 
             return;
@@ -251,9 +258,7 @@ public partial class MainWindow : Window
         var now = DateTime.Now;
 
         if (_lastScanCharAt != DateTime.MinValue && now - _lastScanCharAt > ScanGapReset)
-        {
             _scanBuffer.Clear();
-        }
 
         _lastScanCharAt = now;
         _scanBuffer.Append(e.Text);
@@ -381,9 +386,7 @@ public partial class MainWindow : Window
             await vm.AssignRfidToSelectedKeyAsync(dialog.RfidValue);
 
             if (vm.KeysStatus.StartsWith("RFID przypisany do klucza"))
-            {
                 MessageBox.Show(vm.KeysStatus, "RFID zajęty", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
         }
     }
 
@@ -402,6 +405,58 @@ public partial class MainWindow : Window
             await vm.RemoveRfidFromSelectedKeyAsync();
     }
 
+    private async void NewBuilding_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        var dialog = new BuildingEditDialog { Owner = this };
+        dialog.SetModeForCreate();
+
+        if (dialog.ShowDialog() == true)
+        {
+            await vm.CreateBuildingAsync(dialog.BuildingNameValue);
+            _buildingsLoadedOnce = false;
+        }
+    }
+
+    private async void EditBuilding_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
+            return;
+
+        var building = vm.SelectedBuilding;
+
+        var dialog = new BuildingEditDialog { Owner = this };
+        dialog.SetModeForEdit(building.Name);
+
+        if (dialog.ShowDialog() == true)
+        {
+            await vm.EditBuildingAsync(building.Id, dialog.BuildingNameValue);
+            _buildingsLoadedOnce = false;
+            _keysLoadedOnce = false;
+        }
+    }
+
+    private async void DeleteBuilding_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
+            return;
+
+        var result = MessageBox.Show(
+            $"Usunąć budynek \"{vm.SelectedBuilding.Name}\"?",
+            "Potwierdzenie",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+        {
+            await vm.DeleteSelectedBuildingAsync();
+            _buildingsLoadedOnce = false;
+            _keysLoadedOnce = false;
+        }
+    }
+
     private async void ClearReportFilters_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is MainViewModel vm)
@@ -414,6 +469,14 @@ public partial class MainWindow : Window
             return;
 
         EditKey_Click(sender, e);
+    }
+
+    private void BuildingsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
+            return;
+
+        EditBuilding_Click(sender, e);
     }
 
     private void EditOracle_Click(object sender, RoutedEventArgs e)
@@ -530,57 +593,4 @@ public partial class MainWindow : Window
 
         EnsureAdminUnlocked();
     }
-
-
-    private async void NewBuilding_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MainViewModel vm)
-            return;
-
-        var dialog = new BuildingEditDialog { Owner = this };
-        dialog.SetModeForCreate();
-
-        if (dialog.ShowDialog() == true)
-            await vm.CreateBuildingAsync(dialog.BuildingNameValue);
-    }
-
-    private async void EditBuilding_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
-            return;
-
-        var building = vm.SelectedBuilding;
-
-        var dialog = new BuildingEditDialog { Owner = this };
-        dialog.SetModeForEdit(building.Name);
-
-        if (dialog.ShowDialog() == true)
-            await vm.EditBuildingAsync(building.Id, dialog.BuildingNameValue);
-    }
-
-    private async void DeleteBuilding_Click(object sender, RoutedEventArgs e)
-    {
-        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
-            return;
-
-        var result = MessageBox.Show(
-            $"Usunąć budynek \"{vm.SelectedBuilding.Name}\"?",
-            "Potwierdzenie",
-            MessageBoxButton.YesNo,
-            MessageBoxImage.Question);
-
-        if (result == MessageBoxResult.Yes)
-            await vm.DeleteSelectedBuildingAsync();
-    }
-
-    private void BuildingsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
-            return;
-
-        EditBuilding_Click(sender, e);
-    }
-
-
-
 }

@@ -3,8 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
         Title="Budynek"
-        Height="220"
+        Height="300"
         Width="520"
+        MinHeight="300"
+        MinWidth="520"
         WindowStartupLocation="CenterOwner"
         ResizeMode="NoResize"
         Background="{StaticResource AppPageBrush}"
@@ -31,11 +33,13 @@
 
             <TextBlock Grid.Row="1"
                        Text="Nazwa musi być unikalna."
-                       Style="{StaticResource AppMutedTextStyle}"/>
+                       Style="{StaticResource AppMutedTextStyle}"
+                       Margin="0,0,0,16"/>
 
             <StackPanel Grid.Row="2"
                         Orientation="Horizontal"
-                        HorizontalAlignment="Right">
+                        HorizontalAlignment="Right"
+                        VerticalAlignment="Bottom">
                 <Button Content="Anuluj"
                         Width="110"
                         Height="38"

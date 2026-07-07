@@ -504,13 +504,20 @@
                             <TextBlock Text="Lista kluczy" Style="{StaticResource AppSectionTitleStyle}"/>
 
                             <DataGrid Grid.Row="1"
-                                      ItemsSource="{Binding Keys}"
-                                      SelectedItem="{Binding SelectedKey, Mode=TwoWay}"
-                                      AutoGenerateColumns="False"
-                                      IsReadOnly="True"
-                                      SelectionMode="Single"
-                                      SelectionUnit="FullRow"
-                                      MouseDoubleClick="KeysGrid_MouseDoubleClick">
+                                    ItemsSource="{Binding Keys}"
+                                    SelectedItem="{Binding SelectedKey, Mode=TwoWay}"
+                                    AutoGenerateColumns="False"
+                                    IsReadOnly="True"
+                                    CanUserAddRows="False"
+                                    CanUserDeleteRows="False"
+                                    SelectionMode="Single"
+                                    SelectionUnit="FullRow"
+                                    EnableRowVirtualization="False"
+                                    EnableColumnVirtualization="False"
+                                    VirtualizingPanel.IsVirtualizing="False"
+                                    ScrollViewer.CanContentScroll="False"
+                                    MouseDoubleClick="KeysGrid_MouseDoubleClick">
+
                                 <DataGrid.Columns>
                                     <DataGridTextColumn Header="Nazwa"
                                                         Binding="{Binding Name}"

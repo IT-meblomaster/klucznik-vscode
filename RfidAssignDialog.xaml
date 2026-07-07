@@ -43,7 +43,7 @@
                      KeyDown="HiddenRfidTextBox_KeyDown"/>
 
             <TextBlock Grid.Row="2"
-                       Text="Po zeskanowaniu zapis nastÄ…pi automatycznie."
+                       Text="Po zeskanowaniu zapis nastąpi automatycznie."
                        Foreground="{StaticResource AppMutedBrush}"
                        TextWrapping="Wrap"
                        Margin="0,8,0,16"/>
