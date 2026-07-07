@@ -577,14 +577,14 @@ public class KeyService
 
             await returnLoanCommand.ExecuteNonQueryAsync();
 
-            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"ZwrĂłcono klucz {key.KeyWithBuildingDisplay}. WydaĹ‚: {issuedToName ?? "nieznany"}, zwrĂłciĹ‚: {person.FirstName} {person.LastName}".Trim());
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"Zwrócono klucz {key.KeyWithBuildingDisplay}. Wydał‚: {issuedToName ?? "nieznany"}, zwrócił‚: {person.FirstName} {person.LastName}".Trim());
 
             await transaction.CommitAsync();
 
             return new KeyLoanOperationResult
             {
                 IsReturn = true,
-                Message = $"ZwrĂłcono klucz: {key.KeyWithBuildingDisplay} <- {person.FirstName} {person.LastName}".Trim()
+                Message = $"Zwrócono klucz: {key.KeyWithBuildingDisplay} <- {person.FirstName} {person.LastName}".Trim()
             };
         }
         catch

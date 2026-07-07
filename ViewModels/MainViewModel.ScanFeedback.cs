@@ -11,7 +11,7 @@ public partial class MainViewModel
     {
         SuccessfulScanFeedbackVisible =
             value.StartsWith("Wydano klucz:", StringComparison.OrdinalIgnoreCase) ||
-            value.StartsWith("ZwrĂłcono klucz:", StringComparison.OrdinalIgnoreCase);
+            value.StartsWith("Zwrócono klucz:", StringComparison.OrdinalIgnoreCase);
     }
 
     partial void OnFirstNameChanged(string value)

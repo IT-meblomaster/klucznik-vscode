@@ -28,19 +28,19 @@ public partial class MainWindow : Window
         var vm = new MainViewModel();
         DataContext = vm;
 
-        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid, vm.ScannerSettings.Sid);
+        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid);
 
         Loaded += MainWindow_Loaded;
         MainTabs.SelectionChanged += MainTabs_SelectionChanged;
         Closed += MainWindow_Closed;
     }
 
-    private void CreateRawInputScanner(string vid, string pid, string? sid)
+    private void CreateRawInputScanner(string vid, string pid)
     {
         _rawInputScanner?.CodeScanned -= RawInputScanner_CodeScanned;
         _rawInputScanner?.Dispose();
 
-        _rawInputScanner = new RawInputRfidScanner(this, vid, pid, sid ?? string.Empty);
+        _rawInputScanner = new RawInputRfidScanner(this, vid, pid);
         _rawInputScanner.CodeScanned += RawInputScanner_CodeScanned;
     }
 
@@ -450,7 +450,7 @@ public partial class MainWindow : Window
             return;
 
         vm.SaveScannerSettings();
-        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid, vm.ScannerSettings.Sid);
+        CreateRawInputScanner(vm.ScannerSettings.Vid, vm.ScannerSettings.Pid);
         Keyboard.Focus(this);
     }
 

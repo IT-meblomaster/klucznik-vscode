@@ -43,13 +43,11 @@ public class DatabaseSettingsService
 
         var vid = scanner["Vid"]?.GetValue<string>() ?? "VID_08FF";
         var pid = scanner["Pid"]?.GetValue<string>() ?? "PID_0009";
-        var sid = scanner["Sid"]?.GetValue<string>() ?? string.Empty;
 
         return new ScannerSettingsSection
         {
             Vid = NormalizeVidPid(vid, "VID_"),
-            Pid = NormalizeVidPid(pid, "PID_"),
-            Sid = sid.Trim().ToUpperInvariant()
+            Pid = NormalizeVidPid(pid, "PID_")
         };
     }
 
@@ -89,7 +87,6 @@ public class DatabaseSettingsService
 
         scanner["Vid"] = NormalizeVidPid(settings.Vid, "VID_");
         scanner["Pid"] = NormalizeVidPid(settings.Pid, "PID_");
-        scanner["Sid"] = (settings.Sid ?? string.Empty).Trim().ToUpperInvariant();
 
         SaveJsonObject(root);
     }
