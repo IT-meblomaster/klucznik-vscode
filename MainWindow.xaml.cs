@@ -171,11 +171,22 @@ public partial class MainWindow : Window
 
         var header = selectedTab.Header?.ToString();
 
-        if ((header == "Klucze" || header == "Ustawienia") && !_adminUnlocked)
+        if ((header == "Klucze" || header == "Budynki" || header == "Ustawienia") && !_adminUnlocked)
         {
             SelectTabProgrammatically(0);
             return;
         }
+
+
+        if (header == "Budynki")
+        {
+            if (DataContext is MainViewModel vm)
+                await vm.RefreshBuildingsAsync();
+
+            return;
+        }
+
+
 
         if (header == "Klucze" || header == "Inwentaryzacja")
         {
@@ -291,14 +302,23 @@ public partial class MainWindow : Window
         if (DataContext is not MainViewModel vm)
             return;
 
+        var buildings = await vm.GetBuildingsAsync();
+
+        if (buildings.Count == 0)
+        {
+            MessageBox.Show("Brak aktywnych budynków w bazie.");
+            return;
+        }
+
         var dialog = new KeyEditDialog { Owner = this };
+        dialog.SetBuildings(buildings);
         dialog.SetModeForCreate();
 
         if (dialog.ShowDialog() == true)
         {
             await vm.CreateKeyAsync(
                 dialog.KeyNameValue,
-                dialog.KeyBuildingValue,
+                dialog.KeyBuildingIdValue,
                 dialog.KeyHangerValue,
                 dialog.KeyDescriptionValue);
         }
@@ -310,16 +330,24 @@ public partial class MainWindow : Window
             return;
 
         var key = vm.SelectedKey;
+        var buildings = await vm.GetBuildingsAsync();
+
+        if (buildings.Count == 0)
+        {
+            MessageBox.Show("Brak aktywnych budynków w bazie.");
+            return;
+        }
 
         var dialog = new KeyEditDialog { Owner = this };
-        dialog.SetModeForEdit(key.Name, key.Building, key.Hanger, key.Description);
+        dialog.SetBuildings(buildings);
+        dialog.SetModeForEdit(key.Name, key.BuildingId, key.Hanger, key.Description);
 
         if (dialog.ShowDialog() == true)
         {
             await vm.EditKeyAsync(
                 key.Id,
                 dialog.KeyNameValue,
-                dialog.KeyBuildingValue,
+                dialog.KeyBuildingIdValue,
                 dialog.KeyHangerValue,
                 dialog.KeyDescriptionValue,
                 dialog.RemoveRfid);
@@ -466,14 +494,24 @@ public partial class MainWindow : Window
             vm.MySqlSettings.Password = MySqlPasswordBox.Password;
     }
 
+    private void AdminNewPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel)
+            return;
+    }
+
+    private void AdminRepeatPasswordBox_PasswordChanged(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel)
+            return;
+    }
+
     private void SaveAdminPassword_Click(object sender, RoutedEventArgs e)
     {
         if (DataContext is not MainViewModel vm)
             return;
 
-        var saved = vm.SaveAdminPassword(AdminNewPasswordBox.Password, AdminRepeatPasswordBox.Password);
-
-        if (saved)
+        if (vm.SaveAdminPassword(AdminNewPasswordBox.Password, AdminRepeatPasswordBox.Password))
         {
             AdminNewPasswordBox.Clear();
             AdminRepeatPasswordBox.Clear();
@@ -483,25 +521,66 @@ public partial class MainWindow : Window
 
     private void LockButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!_adminUnlocked)
+        if (_adminUnlocked)
         {
-            if (EnsureAdminUnlocked())
-                Keyboard.Focus(this);
-
+            SetAdminUnlocked(false);
+            SelectTabProgrammatically(0);
             return;
         }
 
-        SetAdminUnlocked(false);
-        SelectTabProgrammatically(0);
-
-        if (DataContext is MainViewModel vm)
-        {
-            vm.FirstName = string.Empty;
-            vm.LastName = string.Empty;
-            vm.Status = "Zablokowano ustawienia. Przyłóż kartę.";
-        }
-
-        ResetScanBuffer();
-        Keyboard.Focus(this);
+        EnsureAdminUnlocked();
     }
+
+
+    private async void NewBuilding_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm)
+            return;
+
+        var dialog = new BuildingEditDialog { Owner = this };
+        dialog.SetModeForCreate();
+
+        if (dialog.ShowDialog() == true)
+            await vm.CreateBuildingAsync(dialog.BuildingNameValue);
+    }
+
+    private async void EditBuilding_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
+            return;
+
+        var building = vm.SelectedBuilding;
+
+        var dialog = new BuildingEditDialog { Owner = this };
+        dialog.SetModeForEdit(building.Name);
+
+        if (dialog.ShowDialog() == true)
+            await vm.EditBuildingAsync(building.Id, dialog.BuildingNameValue);
+    }
+
+    private async void DeleteBuilding_Click(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
+            return;
+
+        var result = MessageBox.Show(
+            $"Usunąć budynek \"{vm.SelectedBuilding.Name}\"?",
+            "Potwierdzenie",
+            MessageBoxButton.YesNo,
+            MessageBoxImage.Question);
+
+        if (result == MessageBoxResult.Yes)
+            await vm.DeleteSelectedBuildingAsync();
+    }
+
+    private void BuildingsGrid_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (DataContext is not MainViewModel vm || vm.SelectedBuilding is null)
+            return;
+
+        EditBuilding_Click(sender, e);
+    }
+
+
+
 }

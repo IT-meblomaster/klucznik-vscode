@@ -13,6 +13,87 @@ public class KeyService
         _connectionString = config.MariaDbConnectionString;
     }
 
+    public async Task<List<BuildingItem>> GetBuildingsAsync()
+    {
+        var result = new List<BuildingItem>();
+
+        await using var connection = new MySqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        const string sql = """
+            SELECT id, name
+            FROM buildings
+            WHERE is_active = 1
+            ORDER BY name;
+            """;
+
+        await using var command = new MySqlCommand(sql, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+
+        while (await reader.ReadAsync())
+        {
+            result.Add(new BuildingItem
+            {
+                Id = reader.GetFieldValue<uint>(0),
+                Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1)
+            });
+        }
+
+        return result;
+    }
+
+    public async Task<uint> InsertBuildingAsync(string name)
+    {
+        await using var connection = new MySqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        const string sql = """
+            INSERT INTO buildings (name, is_active)
+            VALUES (@name, 1);
+            """;
+
+        await using var command = new MySqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@name", name.Trim());
+
+        await command.ExecuteNonQueryAsync();
+        return (uint)command.LastInsertedId;
+    }
+
+    public async Task UpdateBuildingAsync(uint id, string name)
+    {
+        await using var connection = new MySqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        const string sql = """
+            UPDATE buildings
+            SET name = @name
+            WHERE id = @id;
+            """;
+
+        await using var command = new MySqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@id", id);
+        command.Parameters.AddWithValue("@name", name.Trim());
+
+        await command.ExecuteNonQueryAsync();
+    }
+
+    public async Task DeleteBuildingAsync(uint id)
+    {
+        await using var connection = new MySqlConnection(_connectionString);
+        await connection.OpenAsync();
+
+        const string sql = """
+            UPDATE buildings
+            SET is_active = 0
+            WHERE id = @id;
+            """;
+
+        await using var command = new MySqlCommand(sql, connection);
+        command.Parameters.AddWithValue("@id", id);
+
+        await command.ExecuteNonQueryAsync();
+    }
+
     public async Task<List<KeyItem>> GetKeysAsync()
     {
         var result = new List<KeyItem>();
@@ -24,7 +105,8 @@ public class KeyService
             SELECT
                 k.id,
                 k.name,
-                k.budynek,
+                k.building_id,
+                b.name AS building,
                 k.zawieszka,
                 k.description,
                 r.rfid_code,
@@ -34,6 +116,8 @@ public class KeyService
                 kl.issued_to_name,
                 kl.issued_at
             FROM `keys` k
+            JOIN buildings b
+                ON b.id = k.building_id
             LEFT JOIN key_rfid_assignments a
                 ON a.key_id = k.id
                AND a.assigned_to IS NULL
@@ -43,7 +127,7 @@ public class KeyService
                 ON kl.key_id = k.id
                AND kl.returned_at IS NULL
             WHERE k.is_active = 1
-            ORDER BY k.budynek, k.name;
+            ORDER BY b.name, k.name;
             """;
 
         await using var command = new MySqlCommand(sql, connection);
@@ -66,7 +150,8 @@ public class KeyService
             SELECT
                 k.id,
                 k.name,
-                k.budynek,
+                k.building_id,
+                b.name AS building,
                 k.zawieszka,
                 k.description,
                 r.rfid_code,
@@ -81,6 +166,8 @@ public class KeyService
                AND a.assigned_to IS NULL
             JOIN `keys` k
                 ON k.id = a.key_id
+            JOIN buildings b
+                ON b.id = k.building_id
             LEFT JOIN key_loans kl
                 ON kl.key_id = k.id
                AND kl.returned_at IS NULL
@@ -124,12 +211,13 @@ public class KeyService
                     kl.issued_at AS event_time,
                     'Pobranie' AS event_type,
                     k.name AS key_name,
-                    k.budynek AS building,
+                    b.name AS building,
                     kl.issued_to_name AS user_name,
                     kl.issued_to_card AS user_card,
                     r.rfid_code AS rfid_code
                 FROM key_loans kl
                 JOIN `keys` k ON k.id = kl.key_id
+                JOIN buildings b ON b.id = k.building_id
                 LEFT JOIN rfid_tags r ON r.id = kl.rfid_tag_id
 
                 UNION ALL
@@ -138,12 +226,13 @@ public class KeyService
                     kl.returned_at AS event_time,
                     'Zwrot' AS event_type,
                     k.name AS key_name,
-                    k.budynek AS building,
+                    b.name AS building,
                     kl.returned_by_name AS user_name,
                     kl.returned_by_card AS user_card,
                     r.rfid_code AS rfid_code
                 FROM key_loans kl
                 JOIN `keys` k ON k.id = kl.key_id
+                JOIN buildings b ON b.id = k.building_id
                 LEFT JOIN rfid_tags r ON r.id = kl.rfid_tag_id
                 WHERE kl.returned_at IS NOT NULL
             ) report
@@ -179,7 +268,7 @@ public class KeyService
         return result;
     }
 
-    public async Task<uint> InsertAsync(string name, string? building, string? hanger, string? description)
+    public async Task<uint> InsertAsync(string name, uint buildingId, string? hanger, string? description)
     {
         await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -188,14 +277,14 @@ public class KeyService
         try
         {
             const string sql = """
-                INSERT INTO `keys` (name, budynek, zawieszka, description, is_active)
-                VALUES (@name, @building, @hanger, @description, 1);
+                INSERT INTO `keys` (name, building_id, zawieszka, description, is_active)
+                VALUES (@name, @buildingId, @hanger, @description, 1);
                 """;
 
             await using var command = new MySqlCommand(sql, connection, (MySqlTransaction)transaction);
             command.Parameters.AddWithValue("@name", name.Trim());
-            command.Parameters.AddWithValue("@building", NormalizeText(building));
-            command.Parameters.AddWithValue("@hanger", NormalizeText(hanger));
+            command.Parameters.AddWithValue("@buildingId", buildingId);
+            command.Parameters.AddWithValue("@hanger", NormalizeRequiredText(hanger));
             command.Parameters.AddWithValue("@description", NormalizeText(description));
 
             await command.ExecuteNonQueryAsync();
@@ -213,7 +302,7 @@ public class KeyService
         }
     }
 
-    public async Task UpdateAsync(uint id, string name, string? building, string? hanger, string? description, bool removeRfid)
+    public async Task UpdateAsync(uint id, string name, uint buildingId, string? hanger, string? description, bool removeRfid)
     {
         await using var connection = new MySqlConnection(_connectionString);
         await connection.OpenAsync();
@@ -225,7 +314,7 @@ public class KeyService
                 UPDATE `keys`
                 SET
                     name = @name,
-                    budynek = @building,
+                    building_id = @buildingId,
                     zawieszka = @hanger,
                     description = @description
                 WHERE id = @id;
@@ -234,8 +323,8 @@ public class KeyService
             await using var command = new MySqlCommand(sql, connection, (MySqlTransaction)transaction);
             command.Parameters.AddWithValue("@id", id);
             command.Parameters.AddWithValue("@name", name.Trim());
-            command.Parameters.AddWithValue("@building", NormalizeText(building));
-            command.Parameters.AddWithValue("@hanger", NormalizeText(hanger));
+            command.Parameters.AddWithValue("@buildingId", buildingId);
+            command.Parameters.AddWithValue("@hanger", NormalizeRequiredText(hanger));
             command.Parameters.AddWithValue("@description", NormalizeText(description));
 
             await command.ExecuteNonQueryAsync();
@@ -345,7 +434,7 @@ public class KeyService
                     var existingKeyId = Convert.ToUInt32(existingKeyIdObj);
 
                     if (existingKeyId != keyId)
-                        throw new InvalidOperationException("To RFID jest juĹĽ aktywnie przypisane do innego klucza.");
+                        throw new InvalidOperationException("To RFID jest już aktywnie przypisane do innego klucza.");
                 }
             }
 
@@ -439,7 +528,7 @@ public class KeyService
 
             var keyName = await GetKeyNameInternalAsync(connection, (MySqlTransaction)transaction, keyId);
 
-            await InsertLogAsync(connection, (MySqlTransaction)transaction, keyId, rfidTagId, "REMOVE_RFID", $"UsuniÄ™to aktywne przypisanie RFID z klucza {keyName}");
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, keyId, rfidTagId, "REMOVE_RFID", $"Usunięto aktywne przypisanie RFID z klucza {keyName}");
 
             await transaction.CommitAsync();
         }
@@ -577,7 +666,7 @@ public class KeyService
 
             await returnLoanCommand.ExecuteNonQueryAsync();
 
-            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"Zwrócono klucz {key.KeyWithBuildingDisplay}. Wydał‚: {issuedToName ?? "nieznany"}, zwrócił‚: {person.FirstName} {person.LastName}".Trim());
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"Zwrócono klucz {key.KeyWithBuildingDisplay}. Wydał: {issuedToName ?? "nieznany"}, zwrócił: {person.FirstName} {person.LastName}".Trim());
 
             await transaction.CommitAsync();
 
@@ -600,15 +689,16 @@ public class KeyService
         {
             Id = reader.GetFieldValue<uint>(0),
             Name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
-            Building = reader.IsDBNull(2) ? null : reader.GetString(2),
-            Hanger = reader.IsDBNull(3) ? null : reader.GetString(3),
-            Description = reader.IsDBNull(4) ? null : reader.GetString(4),
-            RfidTag = reader.IsDBNull(5) ? null : reader.GetString(5),
-            CurrentRfidTagId = reader.IsDBNull(6) ? null : reader.GetFieldValue<uint>(6),
-            IsActive = !reader.IsDBNull(7) && reader.GetBoolean(7),
-            IsIssued = !reader.IsDBNull(8) && reader.GetBoolean(8),
-            IssuedToName = reader.IsDBNull(9) ? null : reader.GetString(9),
-            IssuedAt = reader.IsDBNull(10) ? null : reader.GetDateTime(10)
+            BuildingId = reader.GetFieldValue<uint>(2),
+            Building = reader.IsDBNull(3) ? null : reader.GetString(3),
+            Hanger = reader.IsDBNull(4) ? null : reader.GetString(4),
+            Description = reader.IsDBNull(5) ? null : reader.GetString(5),
+            RfidTag = reader.IsDBNull(6) ? null : reader.GetString(6),
+            CurrentRfidTagId = reader.IsDBNull(7) ? null : reader.GetFieldValue<uint>(7),
+            IsActive = !reader.IsDBNull(8) && reader.GetBoolean(8),
+            IsIssued = !reader.IsDBNull(9) && reader.GetBoolean(9),
+            IssuedToName = reader.IsDBNull(10) ? null : reader.GetString(10),
+            IssuedAt = reader.IsDBNull(11) ? null : reader.GetDateTime(11)
         };
     }
 
@@ -671,4 +761,6 @@ public class KeyService
     private static object NormalizeText(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
 
     private static object NormalizeFilter(string? value) => string.IsNullOrWhiteSpace(value) ? DBNull.Value : value.Trim();
+
+    private static string NormalizeRequiredText(string? value) => string.IsNullOrWhiteSpace(value) ? string.Empty : value.Trim();
 }

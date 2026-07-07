@@ -534,6 +534,102 @@
                 </Grid>
             </TabItem>
 
+            <TabItem Header="Budynki"
+                    MinWidth="120"
+                    Height="46"
+                    PreviewMouseLeftButtonDown="ProtectedTab_PreviewMouseLeftButtonDown">
+                <Grid Margin="0,18,0,0">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <Border Grid.Row="0" Style="{StaticResource AppCardStyle}" Margin="0,0,0,18">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock Text="Zarządzanie budynkami"
+                                        FontSize="20"
+                                        FontWeight="SemiBold"/>
+                                <TextBlock Text="Dodawanie, edycja oraz usuwanie budynków"
+                                        Style="{StaticResource AppMutedTextStyle}"
+                                        Margin="0,4,0,0"/>
+                            </StackPanel>
+
+                            <WrapPanel Grid.Column="1"
+                                    HorizontalAlignment="Right"
+                                    VerticalAlignment="Center">
+                                <Button Content="Nowy"
+                                        Width="100"
+                                        Height="38"
+                                        Margin="0,0,8,8"
+                                        Style="{StaticResource MaterialDesignRaisedButton}"
+                                        Click="NewBuilding_Click"/>
+                                <Button Content="Edytuj"
+                                        Width="100"
+                                        Height="38"
+                                        Margin="0,0,8,8"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Click="EditBuilding_Click"
+                                        IsEnabled="{Binding CanEditOrDeleteBuilding}"/>
+                                <Button Content="Usuń"
+                                        Width="100"
+                                        Height="38"
+                                        Margin="0,0,0,8"
+                                        Style="{StaticResource MaterialDesignOutlinedButton}"
+                                        Click="DeleteBuilding_Click"
+                                        IsEnabled="{Binding CanEditOrDeleteBuilding}"/>
+                            </WrapPanel>
+                        </Grid>
+                    </Border>
+
+                    <Border Grid.Row="1" Style="{StaticResource AppCardStyle}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+
+                            <TextBlock Text="Lista budynków" Style="{StaticResource AppSectionTitleStyle}"/>
+
+                            <DataGrid Grid.Row="1"
+                                    ItemsSource="{Binding Buildings}"
+                                    SelectedItem="{Binding SelectedBuilding, Mode=TwoWay}"
+                                    AutoGenerateColumns="False"
+                                    IsReadOnly="True"
+                                    SelectionMode="Single"
+                                    SelectionUnit="FullRow"
+                                    MouseDoubleClick="BuildingsGrid_MouseDoubleClick">
+                                <DataGrid.Columns>
+                                    <DataGridTextColumn Header="ID"
+                                                        Binding="{Binding Id}"
+                                                        Width="100"/>
+                                    <DataGridTextColumn Header="Nazwa"
+                                                        Binding="{Binding Name}"
+                                                        Width="*"/>
+                                </DataGrid.Columns>
+                            </DataGrid>
+                        </Grid>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+
+
+
+
+
+
+
+
+
+
+
+
             <TabItem x:Name="SettingsTab"
                      Header="Ustawienia"
                      MinWidth="140"

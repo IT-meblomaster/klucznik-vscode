@@ -31,7 +31,13 @@ public partial class MainViewModel : ObservableObject
 
     private DbSettingsSectionSnapshot? _oracleSnapshot;
     private DbSettingsSectionSnapshot? _mySqlSnapshot;
+    public ObservableCollection<BuildingItem> Buildings { get; } = new();
 
+    [ObservableProperty]
+    private BuildingItem? selectedBuilding;
+
+    [ObservableProperty]
+    private bool canEditOrDeleteBuilding;
     public MainViewModel()
     {
         LoadDatabaseSettings();
@@ -46,7 +52,10 @@ public partial class MainViewModel : ObservableObject
         SelectedReportKey = AllKeysOption;
         SelectedReportBuilding = AllBuildingsOption;
     }
-
+    partial void OnSelectedBuildingChanged(BuildingItem? value)
+    {
+        CanEditOrDeleteBuilding = value is not null;
+    }
     [ObservableProperty]
     private string cardNumber = string.Empty;
 
@@ -72,7 +81,7 @@ public partial class MainViewModel : ObservableObject
     private string currentKeyRfidStatus = string.Empty;
 
     [ObservableProperty]
-    private string status = "PrzyĹ‚ĂłĹĽ kartÄ™ pracownika lub klucza.";
+    private string status = "Przyłóż kartę pracownika lub klucza.";
 
     [ObservableProperty]
     private string keysStatus = "Gotowe.";
@@ -155,6 +164,11 @@ public partial class MainViewModel : ObservableObject
     partial void OnSelectedReportKeyChanged(string value) => ApplyLoanReportFilters();
     partial void OnSelectedReportBuildingChanged(string value) => ApplyLoanReportFilters();
 
+    public async Task<List<BuildingItem>> GetBuildingsAsync()
+    {
+        return await _keyService.GetBuildingsAsync();
+    }
+
     public void LoadDatabaseSettings()
     {
         try
@@ -171,7 +185,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            SettingsStatus = $"BĹ‚Ä…d wczytywania ustawieĹ„: {ex.Message}";
+            SettingsStatus = $"Błąd wczytywania ustawień: {ex.Message}";
         }
     }
 
@@ -184,7 +198,7 @@ public partial class MainViewModel : ObservableObject
         catch (Exception ex)
         {
             ScannerSettings = new ScannerSettingsSection();
-            SettingsStatus = $"BĹ‚Ä…d wczytywania ustawieĹ„ czytnika: {ex.Message}";
+            SettingsStatus = $"Błąd wczytywania ustawień czytnika: {ex.Message}";
         }
     }
 
@@ -196,11 +210,11 @@ public partial class MainViewModel : ObservableObject
             ScannerSettings.Pid = NormalizeVidPid(ScannerSettings.Pid, "PID_");
 
             _databaseSettingsService.SaveScannerSettings(ScannerSettings);
-            SettingsStatus = "Zapisano ustawienia czytnika. Uruchom aplikacjÄ™ ponownie.";
+            SettingsStatus = "Zapisano ustawienia czytnika. Uruchom aplikację ponownie.";
         }
         catch (Exception ex)
         {
-            SettingsStatus = $"BĹ‚Ä…d zapisu ustawieĹ„ czytnika: {ex.Message}";
+            SettingsStatus = $"Błąd zapisu ustawień czytnika: {ex.Message}";
         }
     }
 
@@ -271,14 +285,14 @@ public partial class MainViewModel : ObservableObject
     {
         _oracleSnapshot = OracleSettings.CreateSnapshot();
         OracleSettings.IsEditing = true;
-        SettingsStatus = "Edycja ustawieĹ„ Oracle.";
+        SettingsStatus = "Edycja ustawień Oracle.";
     }
 
     public void BeginEditMySql()
     {
         _mySqlSnapshot = MySqlSettings.CreateSnapshot();
         MySqlSettings.IsEditing = true;
-        SettingsStatus = "Edycja ustawieĹ„ mySQL.";
+        SettingsStatus = "Edycja ustawień mySQL.";
     }
 
     public void CancelEditOracle()
@@ -310,7 +324,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            SettingsStatus = $"BĹ‚Ä…d zapisu Oracle: {ex.Message}";
+            SettingsStatus = $"Błąd zapisu Oracle: {ex.Message}";
         }
     }
 
@@ -325,7 +339,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            SettingsStatus = $"BĹ‚Ä…d zapisu mySQL: {ex.Message}";
+            SettingsStatus = $"Błąd zapisu mySQL: {ex.Message}";
         }
     }
 
@@ -360,7 +374,7 @@ public partial class MainViewModel : ObservableObject
             SelectedReportKey = AllKeysOption;
             SelectedReportBuilding = AllBuildingsOption;
 
-            ReportStatus = $"BĹ‚Ä…d raportu: {ex.Message}";
+            ReportStatus = $"Błąd raportu: {ex.Message}";
         }
     }
 
@@ -399,7 +413,7 @@ public partial class MainViewModel : ObservableObject
             return;
 
         if (_firstScanAt.HasValue && DateTime.Now - _firstScanAt.Value > ScanWindow)
-            ClearScannerState("Przekroczono 10 sekund. WyczyĹ›ciĹ‚em dane.");
+            ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
 
         var person = await _oracleService.FindPersonByCardAsync(code);
         var key = await _keyService.GetKeyByRfidAsync(code);
@@ -412,7 +426,7 @@ public partial class MainViewModel : ObservableObject
 
         if (person is not null && key is not null)
         {
-            Status = $"Skan {code} pasuje jednoczeĹ›nie do pracownika i klucza.";
+            Status = $"Skan {code} pasuje jednocześnie do pracownika i klucza.";
             return;
         }
 
@@ -488,7 +502,7 @@ public partial class MainViewModel : ObservableObject
             }
             catch (Exception ex)
             {
-                ClearScannerState($"BĹ‚Ä…d operacji: {ex.Message}");
+                ClearScannerState($"Błąd operacji: {ex.Message}");
             }
         }
     }
@@ -516,36 +530,36 @@ public partial class MainViewModel : ObservableObject
         {
             Keys.Clear();
             InventoryGroups.Clear();
-            KeysStatus = $"BĹ‚Ä…d MariaDB: {ex.Message}";
+            KeysStatus = $"Błąd MariaDB: {ex.Message}";
         }
     }
 
-    public async Task CreateKeyAsync(string name, string? building, string? hanger, string? description)
+    public async Task CreateKeyAsync(string name, uint buildingId, string? hanger, string? description)
     {
         try
         {
-            await _keyService.InsertAsync(name, building, hanger, description);
+            await _keyService.InsertAsync(name, buildingId, hanger, description);
             KeysStatus = "Dodano klucz.";
             await RefreshKeysAsync();
         }
         catch (Exception ex)
         {
-            KeysStatus = $"BĹ‚Ä…d dodawania: {ex.Message}";
+            KeysStatus = $"Błąd dodawania: {ex.Message}";
         }
     }
 
-    public async Task EditKeyAsync(uint id, string name, string? building, string? hanger, string? description, bool removeRfid)
+    public async Task EditKeyAsync(uint id, string name, uint buildingId, string? hanger, string? description, bool removeRfid)
     {
         try
         {
-            await _keyService.UpdateAsync(id, name, building, hanger, description, removeRfid);
+            await _keyService.UpdateAsync(id, name, buildingId, hanger, description, removeRfid);
             KeysStatus = "Zaktualizowano klucz.";
             await RefreshKeysAsync();
             SelectedKey = Keys.FirstOrDefault(x => x.Id == id);
         }
         catch (Exception ex)
         {
-            KeysStatus = $"BĹ‚Ä…d edycji: {ex.Message}";
+            KeysStatus = $"Błąd edycji: {ex.Message}";
         }
     }
 
@@ -561,13 +575,13 @@ public partial class MainViewModel : ObservableObject
         {
             var id = SelectedKey.Id;
             await _keyService.DeleteAsync(id);
-            KeysStatus = "UsuniÄ™to klucz.";
+            KeysStatus = "Usunięto klucz.";
             SelectedKey = null;
             await RefreshKeysAsync();
         }
         catch (Exception ex)
         {
-            KeysStatus = $"BĹ‚Ä…d usuwania: {ex.Message}";
+            KeysStatus = $"Błąd usuwania: {ex.Message}";
         }
     }
 
@@ -606,7 +620,7 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            KeysStatus = $"BĹ‚Ä…d przypisywania RFID: {ex.Message}";
+            KeysStatus = $"Błąd przypisywania RFID: {ex.Message}";
         }
     }
 
@@ -628,13 +642,13 @@ public partial class MainViewModel : ObservableObject
         {
             var id = SelectedKey.Id;
             await _keyService.RemoveRfidAsync(id);
-            KeysStatus = $"UsuniÄ™to RFID z klucza: {SelectedKey.Name}";
+            KeysStatus = $"Usunięto RFID z klucza: {SelectedKey.Name}";
             await RefreshKeysAsync();
             SelectedKey = Keys.FirstOrDefault(x => x.Id == id);
         }
         catch (Exception ex)
         {
-            KeysStatus = $"BĹ‚Ä…d usuwania RFID: {ex.Message}";
+            KeysStatus = $"Błąd usuwania RFID: {ex.Message}";
         }
     }
 
@@ -807,7 +821,7 @@ public partial class MainViewModel : ObservableObject
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     if (_pendingPerson is not null || _pendingKey is not null)
-                        ClearScannerState("Przekroczono 10 sekund. WyczyĹ›ciĹ‚em dane.");
+                        ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
                 });
             }
             catch (TaskCanceledException)
@@ -844,7 +858,7 @@ public partial class MainViewModel : ObservableObject
                 Application.Current.Dispatcher.Invoke(() =>
                 {
                     ClearScannerPanels();
-                    Status = "PrzyĹ‚ĂłĹĽ kartÄ™ pracownika lub klucza.";
+                    Status = "Przyłóż kartę pracownika lub klucza.";
                 });
             }
             catch (TaskCanceledException)
@@ -883,5 +897,81 @@ public partial class MainViewModel : ObservableObject
             normalized = prefix + normalized;
 
         return normalized;
+    }
+
+        public async Task RefreshBuildingsAsync()
+    {
+        try
+        {
+            var currentSelectedId = SelectedBuilding?.Id;
+
+            Buildings.Clear();
+
+            var items = await _keyService.GetBuildingsAsync();
+
+            foreach (var item in items)
+                Buildings.Add(item);
+
+            if (currentSelectedId.HasValue)
+                SelectedBuilding = Buildings.FirstOrDefault(x => x.Id == currentSelectedId.Value);
+        }
+        catch (Exception ex)
+        {
+            Buildings.Clear();
+            KeysStatus = $"Błąd wczytywania budynków: {ex.Message}";
+        }
+    }
+
+    public async Task CreateBuildingAsync(string name)
+    {
+        try
+        {
+            await _keyService.InsertBuildingAsync(name);
+            KeysStatus = "Dodano budynek.";
+            await RefreshBuildingsAsync();
+        }
+        catch (Exception ex)
+        {
+            KeysStatus = $"Błąd dodawania budynku: {ex.Message}";
+        }
+    }
+
+    public async Task EditBuildingAsync(uint id, string name)
+    {
+        try
+        {
+            await _keyService.UpdateBuildingAsync(id, name);
+            KeysStatus = "Zaktualizowano budynek.";
+            await RefreshBuildingsAsync();
+            await RefreshKeysAsync();
+            SelectedBuilding = Buildings.FirstOrDefault(x => x.Id == id);
+        }
+        catch (Exception ex)
+        {
+            KeysStatus = $"Błąd edycji budynku: {ex.Message}";
+        }
+    }
+
+    public async Task DeleteSelectedBuildingAsync()
+    {
+        if (SelectedBuilding is null)
+        {
+            KeysStatus = "Nie wybrano budynku.";
+            return;
+        }
+
+        try
+        {
+            var id = SelectedBuilding.Id;
+            await _keyService.DeleteBuildingAsync(id);
+            KeysStatus = "Usunięto budynek.";
+            SelectedBuilding = null;
+            await RefreshBuildingsAsync();
+            await RefreshKeysAsync();
+        }
+        catch (Exception ex)
+        {
+            KeysStatus = $"Błąd usuwania budynku: {ex.Message}";
+        }
     }
 }

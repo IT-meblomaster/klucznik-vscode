@@ -4,6 +4,7 @@ public class KeyItem
 {
     public uint Id { get; set; }
     public string Name { get; set; } = string.Empty;
+    public uint BuildingId { get; set; }
     public string? Building { get; set; }
     public string? Hanger { get; set; }
     public string? Description { get; set; }
