@@ -7,11 +7,23 @@ public partial class MainViewModel
     [ObservableProperty]
     private bool successfulScanFeedbackVisible;
 
+    [ObservableProperty]
+    private bool issuedScanFeedbackVisible;
+
+    [ObservableProperty]
+    private bool returnedScanFeedbackVisible;
+
     partial void OnStatusChanged(string value)
     {
-        SuccessfulScanFeedbackVisible =
-            value.StartsWith("Wydano klucz:", StringComparison.OrdinalIgnoreCase) ||
+        IssuedScanFeedbackVisible =
+            value.StartsWith("Wydano klucz:", StringComparison.OrdinalIgnoreCase);
+
+        ReturnedScanFeedbackVisible =
             value.StartsWith("Zwrócono klucz:", StringComparison.OrdinalIgnoreCase);
+
+        SuccessfulScanFeedbackVisible =
+            IssuedScanFeedbackVisible ||
+            ReturnedScanFeedbackVisible;
     }
 
     partial void OnFirstNameChanged(string value)
@@ -35,7 +47,8 @@ public partial class MainViewModel
             string.IsNullOrWhiteSpace(CurrentKeyRfidStatus))
         {
             SuccessfulScanFeedbackVisible = false;
+            IssuedScanFeedbackVisible = false;
+            ReturnedScanFeedbackVisible = false;
         }
     }
 }
-
