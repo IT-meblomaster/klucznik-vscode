@@ -17,9 +17,15 @@
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
 
-        <!-- Kolor podświetlenia przy zwrocie klucza -->
+        <!-- Kolor podświetlenia przy zwrocie klucza-->
+    <!--
         <SolidColorBrush x:Key="AppReturnSurfaceBrush" Color="#DBEAFE"/>
         <SolidColorBrush x:Key="AppReturnBorderBrush" Color="#60A5FA"/>
+    -->
+    
+        <SolidColorBrush x:Key="AppReturnSurfaceBrush" Color="#F3E8FF"/>
+        <SolidColorBrush x:Key="AppReturnBorderBrush" Color="#C084FC"/>
+    
     </Window.Resources>
 
     <Grid Background="{StaticResource AppPageBrush}">
