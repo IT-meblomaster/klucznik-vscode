@@ -13,8 +13,6 @@ public partial class MainViewModel
     [ObservableProperty]
     private bool returnedScanFeedbackVisible;
 
-    public string CurrentKeyHanger => _pendingKey?.Hanger?.Trim() ?? string.Empty;
-
     partial void OnStatusChanged(string value)
     {
         IssuedScanFeedbackVisible =
@@ -35,7 +33,6 @@ public partial class MainViewModel
 
     partial void OnCurrentKeyNameChanged(string value)
     {
-        OnPropertyChanged(nameof(CurrentKeyHanger));
         ClearSuccessfulScanFeedbackIfScannerPanelsAreEmpty();
     }
 
@@ -47,7 +44,6 @@ public partial class MainViewModel
             string.IsNullOrWhiteSpace(CurrentKeyName) &&
             string.IsNullOrWhiteSpace(CurrentKeyBuilding) &&
             string.IsNullOrWhiteSpace(CurrentKeyDescription) &&
-            string.IsNullOrWhiteSpace(CurrentKeyHanger) &&
             string.IsNullOrWhiteSpace(CurrentKeyRfidStatus))
         {
             SuccessfulScanFeedbackVisible = false;
