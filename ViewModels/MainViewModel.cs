@@ -78,6 +78,9 @@ public partial class MainViewModel : ObservableObject
     private string currentKeyDescription = string.Empty;
 
     [ObservableProperty]
+    private string currentKeyHanger = string.Empty;
+
+    [ObservableProperty]
     private string currentKeyRfidStatus = string.Empty;
 
     [ObservableProperty]
@@ -777,6 +780,7 @@ public partial class MainViewModel : ObservableObject
         CurrentKeyName = key.Name;
         CurrentKeyBuilding = key.BuildingDisplay;
         CurrentKeyDescription = key.Description ?? string.Empty;
+        CurrentKeyHanger = key.Hanger ?? string.Empty;
         CurrentKeyRfidStatus = string.Empty;
     }
 
@@ -789,6 +793,7 @@ public partial class MainViewModel : ObservableObject
         CurrentKeyName = string.Empty;
         CurrentKeyBuilding = string.Empty;
         CurrentKeyDescription = string.Empty;
+        CurrentKeyHanger = string.Empty;
         CurrentKeyRfidStatus = string.Empty;
     }
 

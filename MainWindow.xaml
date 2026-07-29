@@ -159,24 +159,41 @@
 
                                 <TextBlock Text="Klucz" Style="{StaticResource AppSectionTitleStyle}"/>
 
-                                <TextBlock Grid.Row="1" Text="NUMER KLUCZA" Style="{StaticResource AppLabelStyle}"/>
-                                <TextBlock Grid.Row="2"
-                                           Text="{Binding CurrentKeyName}"
-                                           Style="{StaticResource AppValueStyle}"
-                                           Margin="0,0,0,12"/>
+                                <TextBlock Grid.Row="1"
+                                           Text="NUMER KLUCZA (BUDYNEK)"
+                                           Style="{StaticResource AppLabelStyle}"/>
 
-                                <TextBlock Grid.Row="3" Text="BUDYNEK" Style="{StaticResource AppLabelStyle}"/>
+                                <TextBlock Grid.Row="2"
+                                           Style="{StaticResource AppValueStyle}"
+                                           TextWrapping="Wrap"
+                                           Margin="0,0,0,12">
+                                    <TextBlock.Text>
+                                        <MultiBinding StringFormat="{}{0} ({1})">
+                                            <Binding Path="CurrentKeyName"/>
+                                            <Binding Path="CurrentKeyBuilding"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                </TextBlock>
+
+                                <TextBlock Grid.Row="3"
+                                           Text="OPIS"
+                                           Style="{StaticResource AppLabelStyle}"/>
+
                                 <TextBlock Grid.Row="4"
-                                           Text="{Binding CurrentKeyBuilding}"
-                                           FontSize="22"
-                                           FontWeight="SemiBold"
+                                           Text="{Binding CurrentKeyDescription}"
+                                           FontSize="16"
+                                           Foreground="{StaticResource AppMutedBrush}"
                                            TextWrapping="Wrap"
                                            Margin="0,0,0,12"/>
 
-                                <TextBlock Grid.Row="5" Text="OPIS" Style="{StaticResource AppLabelStyle}"/>
+                                <TextBlock Grid.Row="5"
+                                           Text="ZAWIESZKA"
+                                           Style="{StaticResource AppLabelStyle}"/>
+
                                 <TextBlock Grid.Row="6"
-                                           Text="{Binding CurrentKeyDescription}"
+                                           Text="{Binding CurrentKeyHanger}"
                                            FontSize="16"
+                                           FontWeight="SemiBold"
                                            Foreground="{StaticResource AppMutedBrush}"
                                            TextWrapping="Wrap"
                                            Margin="0,0,0,12"/>

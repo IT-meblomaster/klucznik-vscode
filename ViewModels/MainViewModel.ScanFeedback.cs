@@ -44,6 +44,7 @@ public partial class MainViewModel
             string.IsNullOrWhiteSpace(CurrentKeyName) &&
             string.IsNullOrWhiteSpace(CurrentKeyBuilding) &&
             string.IsNullOrWhiteSpace(CurrentKeyDescription) &&
+            string.IsNullOrWhiteSpace(CurrentKeyHanger) &&
             string.IsNullOrWhiteSpace(CurrentKeyRfidStatus))
         {
             SuccessfulScanFeedbackVisible = false;
