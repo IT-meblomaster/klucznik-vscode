@@ -83,6 +83,13 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string currentKeyRfidStatus = string.Empty;
 
+    public string CurrentKeyDisplay =>
+        string.IsNullOrWhiteSpace(CurrentKeyName)
+            ? string.Empty
+            : string.IsNullOrWhiteSpace(CurrentKeyBuilding)
+                ? CurrentKeyName
+                : $"{CurrentKeyName} ({CurrentKeyBuilding})";
+
     [ObservableProperty]
     private string status = "Przyłóż kartę pracownika lub klucza.";
 
@@ -148,6 +155,16 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<string> ReportUsers { get; } = new();
     public ObservableCollection<string> ReportKeys { get; } = new();
     public ObservableCollection<string> ReportBuildings { get; } = new();
+
+    partial void OnCurrentKeyNameChanged(string value)
+    {
+        OnPropertyChanged(nameof(CurrentKeyDisplay));
+    }
+
+    partial void OnCurrentKeyBuildingChanged(string value)
+    {
+        OnPropertyChanged(nameof(CurrentKeyDisplay));
+    }
 
     partial void OnSelectedKeyChanged(KeyItem? value)
     {
