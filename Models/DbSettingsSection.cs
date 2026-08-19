@@ -14,6 +14,9 @@ public partial class DbSettingsSection : ObservableObject
     private string address = string.Empty;
 
     [ObservableProperty]
+    private int port;
+
+    [ObservableProperty]
     private string user = string.Empty;
 
     [ObservableProperty]
@@ -30,11 +33,12 @@ public partial class DbSettingsSection : ObservableObject
     public bool ShowSaveCancelButtons => IsEditing;
 
     public DbSettingsSectionSnapshot CreateSnapshot()
-        => new(Address, User, Password, DatabaseName);
+        => new(Address, Port, User, Password, DatabaseName);
 
     public void Restore(DbSettingsSectionSnapshot snapshot)
     {
         Address = snapshot.Address;
+        Port = snapshot.Port;
         User = snapshot.User;
         Password = snapshot.Password;
         DatabaseName = snapshot.DatabaseName;
@@ -50,6 +54,7 @@ public partial class DbSettingsSection : ObservableObject
 
 public record DbSettingsSectionSnapshot(
     string Address,
+    int Port,
     string User,
     string Password,
     string DatabaseName);

@@ -4,7 +4,7 @@ namespace Klucznik.Services;
 
 public class DatabaseConfig
 {
-    public string OracleConnectionString { get; }
+    public string PostgreSqlConnectionString { get; }
     public string MariaDbConnectionString { get; }
 
     public DatabaseConfig()
@@ -14,8 +14,8 @@ public class DatabaseConfig
             .AddJsonFile("appsettings.json", optional: false)
             .Build();
 
-        OracleConnectionString = config.GetConnectionString("Oracle")
-            ?? throw new Exception("Brak Oracle connection string");
+        PostgreSqlConnectionString = config.GetConnectionString("PostgreSql")
+            ?? throw new Exception("Brak PostgreSql connection string");
 
         MariaDbConnectionString = config.GetConnectionString("MariaDb")
             ?? throw new Exception("Brak MariaDb connection string");

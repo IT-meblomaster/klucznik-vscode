@@ -156,16 +156,6 @@ public partial class MainViewModel : ObservableObject
     public ObservableCollection<string> ReportKeys { get; } = new();
     public ObservableCollection<string> ReportBuildings { get; } = new();
 
-    partial void OnCurrentKeyNameChanged(string value)
-    {
-        OnPropertyChanged(nameof(CurrentKeyDisplay));
-    }
-
-    partial void OnCurrentKeyBuildingChanged(string value)
-    {
-        OnPropertyChanged(nameof(CurrentKeyDisplay));
-    }
-
     partial void OnSelectedKeyChanged(KeyItem? value)
     {
         CanEditOrDeleteKey = value is not null;
@@ -438,11 +428,13 @@ public partial class MainViewModel : ObservableObject
         var person = await _oracleService.FindPersonByCardAsync(code);
         var key = await _keyService.GetKeyByRfidAsync(code);
 
-        if (person is null && key is null)
-        {
-            Status = $"Nie rozpoznano skanu: {code}";
-            return;
-        }
+if (person is null && key is null)
+{
+    var message = $"Nie rozpoznano skanu. Odczyt RFID: {code}";
+    Status = message;
+    AddScannerLog(message);
+    return;
+}
 
         if (person is not null && key is not null)
         {

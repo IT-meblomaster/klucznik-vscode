@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Klucznik.Models;
-using Oracle.ManagedDataAccess.Client;
+using Npgsql;
 
 namespace Klucznik.Services;
 
@@ -15,33 +15,41 @@ public class OracleTestService
             .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
             .Build();
 
-        _connectionString = config.GetConnectionString("Oracle")
-            ?? throw new InvalidOperationException("Brak ConnectionStrings:Oracle w appsettings.json");
+        _connectionString = config.GetConnectionString("PostgreSql")
+            ?? throw new InvalidOperationException(
+                "Brak ConnectionStrings:PostgreSql w appsettings.json");
     }
 
     public async Task<PersonResult?> FindPersonByCardAsync(string cardNumber)
     {
         if (string.IsNullOrWhiteSpace(cardNumber))
-        {
             return null;
-        }
 
-        var normalizedCardNumber = cardNumber.Trim().TrimStart('0');
+        var rawCardNumber = cardNumber.Trim();
+        var normalizedCardNumber = rawCardNumber.TrimStart('0');
 
-        await using var connection = new OracleConnection(_connectionString);
+        await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync();
 
-        const string sql = @"
+        const string sql = """
             SELECT
-                NR_EWIDENCYJNY,
-                IMIE_1,
-                NAZWISKO
-            FROM MEBLO_MP_OSOBY
-            WHERE NUMER_KARTY_RCP = :cardNumber";
+                nr_karty::text,
+                imie,
+                nazwisko
+            FROM public.users_saik
+            WHERE TRIM(nr_karty::text) = @rawCardNumber
+               OR LTRIM(TRIM(nr_karty::text), '0') = @normalizedCardNumber
+            ORDER BY
+                CASE
+                    WHEN TRIM(nr_karty::text) = @rawCardNumber THEN 0
+                    ELSE 1
+                END
+            LIMIT 1;
+            """;
 
-        await using var command = new OracleCommand(sql, connection);
-        command.BindByName = true;
-        command.Parameters.Add(new OracleParameter("cardNumber", normalizedCardNumber));
+        await using var command = new NpgsqlCommand(sql, connection);
+        command.Parameters.AddWithValue("rawCardNumber", rawCardNumber);
+        command.Parameters.AddWithValue("normalizedCardNumber", normalizedCardNumber);
 
         await using var reader = await command.ExecuteReaderAsync();
 

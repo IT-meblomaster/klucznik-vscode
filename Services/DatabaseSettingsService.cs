@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Klucznik.Models;
+using Npgsql;
 
 namespace Klucznik.Services;
 
@@ -22,13 +23,13 @@ public class DatabaseSettingsService
         var connectionStrings = root["ConnectionStrings"]?.AsObject()
             ?? throw new InvalidOperationException("Brak sekcji ConnectionStrings w appsettings.json.");
 
-        var oracleRaw = connectionStrings["Oracle"]?.GetValue<string>()
-            ?? throw new InvalidOperationException("Brak wpisu ConnectionStrings:Oracle.");
+        var postgreSqlRaw = connectionStrings["PostgreSql"]?.GetValue<string>()
+            ?? throw new InvalidOperationException("Brak wpisu ConnectionStrings:PostgreSql.");
 
         var mariaDbRaw = connectionStrings["MariaDb"]?.GetValue<string>()
             ?? throw new InvalidOperationException("Brak wpisu ConnectionStrings:MariaDb.");
 
-        return (ParseOracle(oracleRaw), ParseMariaDb(mariaDbRaw));
+        return (ParsePostgreSql(postgreSqlRaw), ParseMariaDb(mariaDbRaw));
     }
 
     public ScannerSettingsSection LoadScannerSettings()
@@ -57,9 +58,9 @@ public class DatabaseSettingsService
         var connectionStrings = root["ConnectionStrings"]?.AsObject()
             ?? throw new InvalidOperationException("Brak sekcji ConnectionStrings w appsettings.json.");
 
-        if (string.Equals(section.ConfigKey, "Oracle", StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(section.ConfigKey, "PostgreSql", StringComparison.OrdinalIgnoreCase))
         {
-            connectionStrings["Oracle"] = BuildOracleConnectionString(section);
+            connectionStrings["PostgreSql"] = BuildPostgreSqlConnectionString(section);
         }
         else if (string.Equals(section.ConfigKey, "MariaDb", StringComparison.OrdinalIgnoreCase))
         {
@@ -115,21 +116,19 @@ public class DatabaseSettingsService
         File.WriteAllText(_settingsPath, json);
     }
 
-    private static DbSettingsSection ParseOracle(string connectionString)
+    private static DbSettingsSection ParsePostgreSql(string connectionString)
     {
-        var user = ExtractBetween(connectionString, "User Id=", ";");
-        var password = ExtractBetween(connectionString, "Password=", ";");
-        var host = ExtractBetween(connectionString, "(HOST=", ")");
-        var sid = ExtractBetween(connectionString, "(SID=", ")");
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
 
         return new DbSettingsSection
         {
-            SectionName = "Oracle",
-            ConfigKey = "Oracle",
-            Address = host,
-            User = user,
-            Password = password,
-            DatabaseName = sid,
+            SectionName = "PostgreSQL",
+            ConfigKey = "PostgreSql",
+            Address = builder.Host,
+            Port = builder.Port,
+            User = builder.Username,
+            Password = builder.Password ?? string.Empty,
+            DatabaseName = builder.Database ?? string.Empty,
             IsEditing = false
         };
     }
@@ -152,6 +151,7 @@ public class DatabaseSettingsService
             SectionName = "mySQL",
             ConfigKey = "MariaDb",
             Address = server ?? string.Empty,
+            Port = 0,
             User = user ?? string.Empty,
             Password = password ?? string.Empty,
             DatabaseName = database ?? string.Empty,
@@ -159,12 +159,18 @@ public class DatabaseSettingsService
         };
     }
 
-    private static string BuildOracleConnectionString(DbSettingsSection section)
+    private static string BuildPostgreSqlConnectionString(DbSettingsSection section)
     {
-        return
-            $"User Id={section.User};" +
-            $"Password={section.Password};" +
-            $"Data Source=(DESCRIPTION=(ADDRESS=(PROTOCOL=TCP)(HOST={section.Address})(PORT=1521))(CONNECT_DATA=(SID={section.DatabaseName})))";
+        var builder = new NpgsqlConnectionStringBuilder
+        {
+            Host = section.Address,
+            Port = section.Port > 0 ? section.Port : 5432,
+            Database = section.DatabaseName,
+            Username = section.User,
+            Password = section.Password
+        };
+
+        return builder.ConnectionString;
     }
 
     private static string BuildMariaDbConnectionString(DbSettingsSection section)
@@ -174,21 +180,6 @@ public class DatabaseSettingsService
             $"Database={section.DatabaseName};" +
             $"User={section.User};" +
             $"Password={section.Password};";
-    }
-
-    private static string ExtractBetween(string source, string startToken, string endToken)
-    {
-        var startIndex = source.IndexOf(startToken, StringComparison.OrdinalIgnoreCase);
-        if (startIndex < 0)
-            return string.Empty;
-
-        startIndex += startToken.Length;
-
-        var endIndex = source.IndexOf(endToken, startIndex, StringComparison.OrdinalIgnoreCase);
-        if (endIndex < 0)
-            return source[startIndex..];
-
-        return source[startIndex..endIndex];
     }
 
     private static string NormalizeVidPid(string value, string prefix)

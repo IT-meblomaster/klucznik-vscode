@@ -33,7 +33,13 @@ public partial class MainViewModel
 
     partial void OnCurrentKeyNameChanged(string value)
     {
+        OnPropertyChanged(nameof(CurrentKeyDisplay));
         ClearSuccessfulScanFeedbackIfScannerPanelsAreEmpty();
+    }
+
+    partial void OnCurrentKeyBuildingChanged(string value)
+    {
+        OnPropertyChanged(nameof(CurrentKeyDisplay));
     }
 
     private void ClearSuccessfulScanFeedbackIfScannerPanelsAreEmpty()
