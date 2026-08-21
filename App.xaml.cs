@@ -1,7 +1,6 @@
-﻿using System;
+﻿
 using System.Threading;
 using System.Windows;
-using System.Windows.Media;
 using Klucznik.Services;
 
 namespace Klucznik;
@@ -32,12 +31,11 @@ public partial class App : Application
 
         base.OnStartup(e);
 
-        var window = new MainWindow();
-        MainWindow = window;
+var window = new MainWindow();
+MainWindow = window;
 
-        ApplyScannerColorsToWindowResources(window);
+window.Show();
 
-        window.Show();
     }
 
     private static void LoadScannerFeedbackColors()
@@ -58,49 +56,24 @@ public partial class App : Application
         }
     }
 
-    private static void SetBrushColor(string resourceKey, string colorValue)
+ private static void SetBrushColor(string resourceKey, string colorValue)
+{
+    // Pędzle zdefiniowane w App.xaml i używane przez StaticResource w Setterach
+    // są przez WPF automatycznie zamrażane (Freeze()) — nie da się zmienić ich
+    // właściwości Color. Dlatego zamiast modyfikować istniejący obiekt,
+    // podmieniamy cały wpis w słowniku zasobów na nowy, świeżo utworzony pędzel.
+    // Wymaga to, aby MainWindow.xaml odwoływał się do tych kluczy przez
+    // DynamicResource (nie StaticResource) — inaczej podmiana nie zostanie
+    // zauważona przez elementy, których Style został już rozwiązany.
+    try
     {
-        if (Current.Resources[resourceKey] is not SolidColorBrush brush)
-            return;
-
-        try
-        {
-            brush.Color = (Color)ColorConverter.ConvertFromString(colorValue);
-        }
-        catch
-        {
-            // Wartość domyślna pozostaje bez zmian.
-        }
+        Current.Resources[resourceKey] = ScannerFeedbackColorService.CreateBrush(colorValue);
     }
-
-    private static void ApplyScannerColorsToWindowResources(MainWindow window)
+    catch
     {
-        try
-        {
-            CopyBrushColor(
-                window.Resources["AppReturnSurfaceBrush"] as SolidColorBrush,
-                Current.Resources["AppReturnSurfaceBrush"] as SolidColorBrush);
-
-            CopyBrushColor(
-                window.Resources["AppReturnBorderBrush"] as SolidColorBrush,
-                Current.Resources["AppReturnBorderBrush"] as SolidColorBrush);
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine(
-                $"Nie udało się zastosować kolorów do zasobów MainWindow: {ex}");
-        }
+        // Wartość domyślna pozostaje bez zmian.
     }
-
-    private static void CopyBrushColor(
-        SolidColorBrush? target,
-        SolidColorBrush? source)
-    {
-        if (target is null || source is null)
-            return;
-
-        target.Color = source.Color;
-    }
+}
 
     protected override void OnExit(ExitEventArgs e)
     {

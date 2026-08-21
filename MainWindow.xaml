@@ -83,11 +83,11 @@
 
     <Setter
         Property="Background"
-        Value="{StaticResource AppSuccessSurfaceBrush}"/>
+        Value="{DynamicResource AppSuccessSurfaceBrush}"/>
 
     <Setter
         Property="BorderBrush"
-        Value="{StaticResource AppSuccessBorderBrush}"/>
+        Value="{DynamicResource AppSuccessBorderBrush}"/>
 
 </DataTrigger>
 
@@ -97,11 +97,11 @@
 
     <Setter
         Property="Background"
-        Value="{StaticResource AppReturnSurfaceBrush}"/>
+        Value="{DynamicResource AppReturnSurfaceBrush}"/>
 
     <Setter
         Property="BorderBrush"
-        Value="{StaticResource AppReturnBorderBrush}"/>
+        Value="{DynamicResource AppReturnBorderBrush}"/>
 
 </DataTrigger>
 
@@ -150,11 +150,11 @@
 
     <Setter
         Property="Background"
-        Value="{StaticResource AppSuccessSurfaceBrush}"/>
+        Value="{DynamicResource AppSuccessSurfaceBrush}"/>
 
     <Setter
         Property="BorderBrush"
-        Value="{StaticResource AppSuccessBorderBrush}"/>
+        Value="{DynamicResource AppSuccessBorderBrush}"/>
 
 </DataTrigger>
 
@@ -164,11 +164,11 @@
 
     <Setter
         Property="Background"
-        Value="{StaticResource AppReturnSurfaceBrush}"/>
+        Value="{DynamicResource AppReturnSurfaceBrush}"/>
 
     <Setter
         Property="BorderBrush"
-        Value="{StaticResource AppReturnBorderBrush}"/>
+        Value="{DynamicResource AppReturnBorderBrush}"/>
 
 </DataTrigger>
 
@@ -286,7 +286,7 @@
                                                             ToolTip="{Binding InventoryTooltip}">
                                                         <Border.Style>
                                                             <Style TargetType="Border">
-                                                                <Setter Property="Background" Value="{StaticResource AppSuccessSurfaceBrush}"/>
+                                                                <Setter Property="Background" Value="{DynamicResource AppSuccessSurfaceBrush}"/>
                                                                 <Setter Property="BorderBrush" Value="#86EFAC"/>
                                                                 <Style.Triggers>
                                                                     <DataTrigger Binding="{Binding IsIssued}" Value="True">
