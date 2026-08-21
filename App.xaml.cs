@@ -14,10 +14,7 @@ public partial class App : Application
     {
         const string mutexName = @"Global\Klucznik";
 
-        _mutex = new Mutex(
-            true,
-            mutexName,
-            out bool createdNew);
+        _mutex = new Mutex(true, mutexName, out bool createdNew);
 
         if (!createdNew)
         {
@@ -28,127 +25,82 @@ public partial class App : Application
                 MessageBoxImage.Information);
 
             Shutdown();
-
             return;
         }
 
+        LoadScannerFeedbackColors();
 
-        /*
-         * App.xaml używa StaticResource.
-         *
-         * Dlatego kolory wydania muszą zostać ustawione
-         * przed utworzeniem MainWindow.
-         */
-        ApplyIssuedFeedbackColorsBeforeWindowCreation();
-
-
-        /*
-         * Tworzenie aplikacji / MainWindow.
-         */
         base.OnStartup(e);
 
+        var window = new MainWindow();
+        MainWindow = window;
 
-        /*
-         * MainWindow.xaml posiada zasoby lokalne:
-         *
-         * AppReturnSurfaceBrush
-         * AppReturnBorderBrush
-         *
-         * dlatego kolory zwrotu ustawiamy po utworzeniu okna.
-         */
-        ApplyReturnedFeedbackColorsToMainWindow();
+        ApplyScannerColorsToWindowResources(window);
+
+        window.Show();
     }
 
-
-    private static void ApplyIssuedFeedbackColorsBeforeWindowCreation()
+    private static void LoadScannerFeedbackColors()
     {
         try
         {
-            var settings =
-                new ScannerFeedbackColorService().Load();
+            var settings = new ScannerFeedbackColorService().Load();
 
-
-            /*
-             * TŁO WYDANIA
-             */
-            if (Current.Resources["AppSuccessSurfaceBrush"]
-                is SolidColorBrush surfaceBrush)
-            {
-                surfaceBrush.Color =
-                    (Color)ColorConverter.ConvertFromString(
-                        settings.IssuedBackground);
-            }
-
-
-            /*
-             * RAMKA WYDANIA
-             */
-            if (Current.Resources["AppSuccessBorderBrush"]
-                is SolidColorBrush borderBrush)
-            {
-                borderBrush.Color =
-                    (Color)ColorConverter.ConvertFromString(
-                        settings.IssuedBorder);
-            }
+            SetBrushColor("AppSuccessSurfaceBrush", settings.IssuedBackground);
+            SetBrushColor("AppSuccessBorderBrush", settings.IssuedBorder);
+            SetBrushColor("AppReturnSurfaceBrush", settings.ReturnedBackground);
+            SetBrushColor("AppReturnBorderBrush", settings.ReturnedBorder);
         }
-        catch
+        catch (Exception ex)
         {
-            /*
-             * Brak dostępu do bazy lub błędne dane
-             * nie mogą zablokować uruchomienia programu.
-             *
-             * W takim przypadku zostają wartości
-             * domyślne z App.xaml.
-             */
+            System.Diagnostics.Debug.WriteLine(
+                $"Nie udało się wczytać kolorów skanera: {ex}");
         }
     }
 
+    private static void SetBrushColor(string resourceKey, string colorValue)
+    {
+        if (Current.Resources[resourceKey] is not SolidColorBrush brush)
+            return;
 
-    private static void ApplyReturnedFeedbackColorsToMainWindow()
+        try
+        {
+            brush.Color = (Color)ColorConverter.ConvertFromString(colorValue);
+        }
+        catch
+        {
+            // Wartość domyślna pozostaje bez zmian.
+        }
+    }
+
+    private static void ApplyScannerColorsToWindowResources(MainWindow window)
     {
         try
         {
-            var settings =
-                new ScannerFeedbackColorService().Load();
+            CopyBrushColor(
+                window.Resources["AppReturnSurfaceBrush"] as SolidColorBrush,
+                Current.Resources["AppReturnSurfaceBrush"] as SolidColorBrush);
 
-            var window = Current.MainWindow;
-
-            if (window == null)
-                return;
-
-
-            /*
-             * TŁO ZWROTU
-             */
-            if (window.Resources["AppReturnSurfaceBrush"]
-                is SolidColorBrush surfaceBrush)
-            {
-                surfaceBrush.Color =
-                    (Color)ColorConverter.ConvertFromString(
-                        settings.ReturnedBackground);
-            }
-
-
-            /*
-             * RAMKA ZWROTU
-             */
-            if (window.Resources["AppReturnBorderBrush"]
-                is SolidColorBrush borderBrush)
-            {
-                borderBrush.Color =
-                    (Color)ColorConverter.ConvertFromString(
-                        settings.ReturnedBorder);
-            }
+            CopyBrushColor(
+                window.Resources["AppReturnBorderBrush"] as SolidColorBrush,
+                Current.Resources["AppReturnBorderBrush"] as SolidColorBrush);
         }
-        catch
+        catch (Exception ex)
         {
-            /*
-             * Pozostawiamy wartości domyślne
-             * z MainWindow.xaml.
-             */
+            System.Diagnostics.Debug.WriteLine(
+                $"Nie udało się zastosować kolorów do zasobów MainWindow: {ex}");
         }
     }
 
+    private static void CopyBrushColor(
+        SolidColorBrush? target,
+        SolidColorBrush? source)
+    {
+        if (target is null || source is null)
+            return;
+
+        target.Color = source.Color;
+    }
 
     protected override void OnExit(ExitEventArgs e)
     {

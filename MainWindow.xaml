@@ -16,16 +16,6 @@
 
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibilityConverter"/>
-
-        <!-- Kolor podświetlenia przy zwrocie klucza-->
-    <!--
-        <SolidColorBrush x:Key="AppReturnSurfaceBrush" Color="#DBEAFE"/>
-        <SolidColorBrush x:Key="AppReturnBorderBrush" Color="#60A5FA"/>
-    -->
-    
-        <SolidColorBrush x:Key="AppReturnSurfaceBrush" Color="#F3E8FF"/>
-        <SolidColorBrush x:Key="AppReturnBorderBrush" Color="#C084FC"/>
-    
     </Window.Resources>
 
     <Grid Background="{StaticResource AppPageBrush}">
@@ -86,7 +76,11 @@
                             <Border.Style>
                                 <Style TargetType="Border" BasedOn="{StaticResource AppCardStyle}">
                                     <Style.Triggers>
-<DataTrigger Binding="{Binding IssuedScanFeedbackVisible}" Value="True">
+
+<DataTrigger
+    Binding="{Binding IssuedScanFeedbackVisible}"
+    Value="True">
+
     <Setter
         Property="Background"
         Value="{StaticResource AppSuccessSurfaceBrush}"/>
@@ -94,12 +88,23 @@
     <Setter
         Property="BorderBrush"
         Value="{StaticResource AppSuccessBorderBrush}"/>
+
 </DataTrigger>
 
-                                        <DataTrigger Binding="{Binding ReturnedScanFeedbackVisible}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource AppReturnSurfaceBrush}"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource AppReturnBorderBrush}"/>
-                                        </DataTrigger>
+<DataTrigger
+    Binding="{Binding ReturnedScanFeedbackVisible}"
+    Value="True">
+
+    <Setter
+        Property="Background"
+        Value="{StaticResource AppReturnSurfaceBrush}"/>
+
+    <Setter
+        Property="BorderBrush"
+        Value="{StaticResource AppReturnBorderBrush}"/>
+
+</DataTrigger>
+
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
@@ -138,7 +143,11 @@
                             <Border.Style>
                                 <Style TargetType="Border" BasedOn="{StaticResource AppCardStyle}">
                                     <Style.Triggers>
-<DataTrigger Binding="{Binding IssuedScanFeedbackVisible}" Value="True">
+
+<DataTrigger
+    Binding="{Binding IssuedScanFeedbackVisible}"
+    Value="True">
+
     <Setter
         Property="Background"
         Value="{StaticResource AppSuccessSurfaceBrush}"/>
@@ -146,12 +155,23 @@
     <Setter
         Property="BorderBrush"
         Value="{StaticResource AppSuccessBorderBrush}"/>
+
 </DataTrigger>
 
-                                        <DataTrigger Binding="{Binding ReturnedScanFeedbackVisible}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource AppReturnSurfaceBrush}"/>
-                                            <Setter Property="BorderBrush" Value="{StaticResource AppReturnBorderBrush}"/>
-                                        </DataTrigger>
+<DataTrigger
+    Binding="{Binding ReturnedScanFeedbackVisible}"
+    Value="True">
+
+    <Setter
+        Property="Background"
+        Value="{StaticResource AppReturnSurfaceBrush}"/>
+
+    <Setter
+        Property="BorderBrush"
+        Value="{StaticResource AppReturnBorderBrush}"/>
+
+</DataTrigger>
+
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>

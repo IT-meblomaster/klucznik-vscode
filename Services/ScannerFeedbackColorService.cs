@@ -9,7 +9,6 @@ namespace Klucznik.Services;
 public class ScannerFeedbackColorService
 {
     private const string SettingKey = "scanner_feedback_colors";
-
     private readonly string _connectionString;
 
     public ScannerFeedbackColorService()
@@ -46,20 +45,16 @@ public class ScannerFeedbackColorService
 
         try
         {
-            var settings =
-                JsonSerializer.Deserialize<ScannerFeedbackColorSettings>(raw)
+            var settings = JsonSerializer.Deserialize<ScannerFeedbackColorSettings>(raw)
                 ?? new ScannerFeedbackColorSettings();
 
             Normalize(settings);
-
             return settings;
         }
         catch (JsonException)
         {
-            // Uszkodzona wartość nie powinna uniemożliwić startu aplikacji.
             var defaults = new ScannerFeedbackColorSettings();
             Save(defaults);
-
             return defaults;
         }
     }
@@ -67,15 +62,12 @@ public class ScannerFeedbackColorService
     public void Save(ScannerFeedbackColorSettings settings)
     {
         Normalize(settings);
-
         EnsureSettingsTableExists();
 
-        var json = JsonSerializer.Serialize(
-            settings,
-            new JsonSerializerOptions
-            {
-                WriteIndented = false
-            });
+        var json = JsonSerializer.Serialize(settings, new JsonSerializerOptions
+        {
+            WriteIndented = false
+        });
 
         using var connection = new MySqlConnection(_connectionString);
         connection.Open();
@@ -89,10 +81,8 @@ public class ScannerFeedbackColorService
             """;
 
         using var command = new MySqlCommand(sql, connection);
-
         command.Parameters.AddWithValue("@settingKey", SettingKey);
         command.Parameters.AddWithValue("@settingValue", json);
-
         command.ExecuteNonQuery();
     }
 
@@ -102,36 +92,18 @@ public class ScannerFeedbackColorService
             (Color)ColorConverter.ConvertFromString(color));
 
         brush.Freeze();
-
         return brush;
     }
 
     private static void Normalize(ScannerFeedbackColorSettings settings)
     {
-        settings.IssuedBackground =
-            NormalizeColor(
-                settings.IssuedBackground,
-                "#DCFCE7");
-
-        settings.IssuedBorder =
-            NormalizeColor(
-                settings.IssuedBorder,
-                "#86EFAC");
-
-        settings.ReturnedBackground =
-            NormalizeColor(
-                settings.ReturnedBackground,
-                "#F3E8FF");
-
-        settings.ReturnedBorder =
-            NormalizeColor(
-                settings.ReturnedBorder,
-                "#C084FC");
+        settings.IssuedBackground = NormalizeColor(settings.IssuedBackground, "#DCFCE7");
+        settings.IssuedBorder = NormalizeColor(settings.IssuedBorder, "#86EFAC");
+        settings.ReturnedBackground = NormalizeColor(settings.ReturnedBackground, "#F3E8FF");
+        settings.ReturnedBorder = NormalizeColor(settings.ReturnedBorder, "#C084FC");
     }
 
-    private static string NormalizeColor(
-        string? value,
-        string fallback)
+    private static string NormalizeColor(string? value, string fallback)
     {
         if (string.IsNullOrWhiteSpace(value))
             return fallback;
@@ -139,10 +111,7 @@ public class ScannerFeedbackColorService
         try
         {
             _ = ColorConverter.ConvertFromString(value);
-
-            return value
-                .Trim()
-                .ToUpperInvariant();
+            return value.Trim().ToUpperInvariant();
         }
         catch
         {
@@ -165,7 +134,6 @@ public class ScannerFeedbackColorService
             """;
 
         using var command = new MySqlCommand(sql, connection);
-
         command.ExecuteNonQuery();
     }
 }
