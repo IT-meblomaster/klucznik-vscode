@@ -86,10 +86,15 @@
                             <Border.Style>
                                 <Style TargetType="Border" BasedOn="{StaticResource AppCardStyle}">
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IssuedScanFeedbackVisible}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource AppSuccessSurfaceBrush}"/>
-                                            <Setter Property="BorderBrush" Value="#86EFAC"/>
-                                        </DataTrigger>
+<DataTrigger Binding="{Binding IssuedScanFeedbackVisible}" Value="True">
+    <Setter
+        Property="Background"
+        Value="{StaticResource AppSuccessSurfaceBrush}"/>
+
+    <Setter
+        Property="BorderBrush"
+        Value="{StaticResource AppSuccessBorderBrush}"/>
+</DataTrigger>
 
                                         <DataTrigger Binding="{Binding ReturnedScanFeedbackVisible}" Value="True">
                                             <Setter Property="Background" Value="{StaticResource AppReturnSurfaceBrush}"/>
@@ -133,10 +138,15 @@
                             <Border.Style>
                                 <Style TargetType="Border" BasedOn="{StaticResource AppCardStyle}">
                                     <Style.Triggers>
-                                        <DataTrigger Binding="{Binding IssuedScanFeedbackVisible}" Value="True">
-                                            <Setter Property="Background" Value="{StaticResource AppSuccessSurfaceBrush}"/>
-                                            <Setter Property="BorderBrush" Value="#86EFAC"/>
-                                        </DataTrigger>
+<DataTrigger Binding="{Binding IssuedScanFeedbackVisible}" Value="True">
+    <Setter
+        Property="Background"
+        Value="{StaticResource AppSuccessSurfaceBrush}"/>
+
+    <Setter
+        Property="BorderBrush"
+        Value="{StaticResource AppSuccessBorderBrush}"/>
+</DataTrigger>
 
                                         <DataTrigger Binding="{Binding ReturnedScanFeedbackVisible}" Value="True">
                                             <Setter Property="Background" Value="{StaticResource AppReturnSurfaceBrush}"/>
@@ -175,7 +185,7 @@
 
                                 <TextBlock Grid.Row="4"
                                            Text="{Binding CurrentKeyDescription}"
-                                           FontSize="16"
+                                           FontSize="24"
                                            Foreground="{StaticResource AppMutedBrush}"
                                            TextWrapping="Wrap"
                                            Margin="20,0,0,12"/>
