@@ -541,12 +541,13 @@ if (person is null && key is null)
                 AddScannerLog(result.Message);
                 Status = result.Message;
 
+                ApplyKeyLoanResult(_pendingKey.Id, result, _pendingPerson);
+
                 _pendingPerson = null;
                 _pendingKey = null;
                 _firstScanAt = null;
 
                 StartSuccessDisplayClear();
-                await RefreshKeysAsync();
                 await LoadLoanReportsAsync();
             }
             catch (Exception ex)
@@ -707,6 +708,20 @@ if (person is null && key is null)
         CardNumber = string.Empty;
     }
 
+    private void ApplyKeyLoanResult(uint keyId, KeyLoanOperationResult result, PersonResult person)
+    {
+        var affected = Keys.FirstOrDefault(x => x.Id == keyId);
+
+        if (affected is null)
+            return;
+
+        affected.IsIssued = result.IsIssue;
+        affected.IssuedToName = result.IsIssue
+            ? $"{person.FirstName} {person.LastName}".Trim()
+            : null;
+        affected.IssuedAt = result.IsIssue ? DateTime.Now : null;
+    }
+    
     private void RebuildInventoryGroups()
     {
         InventoryGroups.Clear();

@@ -58,7 +58,7 @@ public class AdminPasswordService
     public void SavePassword(string password)
     {
         if (string.IsNullOrWhiteSpace(password))
-            throw new InvalidOperationException("Hasło nie moĹĽe byÄ‡ puste.");
+            throw new InvalidOperationException("Hasło nie może być puste.");
 
         EnsureSettingsTableExists();
 

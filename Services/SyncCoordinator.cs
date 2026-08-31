@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Klucznik.Models;
 
 namespace Klucznik.Services;
@@ -169,87 +170,97 @@ public class SyncCoordinator : IDisposable
         }
     }
 
-    public async Task TrySyncPendingEventsAsync()
+public async Task TrySyncPendingEventsAsync()
+{
+    if (!await _syncLock.WaitAsync(0))
+        return; // synchronizacja już trwa
+
+    try
     {
-        if (!await _syncLock.WaitAsync(0))
-            return; // synchronizacja już trwa
+        List<PendingKeyEvent> pending;
 
         try
         {
-            var pending = _localCache.GetUnsyncedEvents();
+            pending = _localCache.GetUnsyncedEvents();
+        }
+        catch (Exception ex)
+        {
+            SyncMessage?.Invoke(this, $"Błąd odczytu lokalnej kolejki: {ex.Message}");
+            return;
+        }
 
-            if (pending.Count == 0)
-                return;
+        if (pending.Count == 0)
+            return;
 
-            foreach (var ev in pending)
+        foreach (var ev in pending)
+        {
+            if (ev.PersonOffline)
             {
-                if (ev.PersonOffline)
-                {
-                    try
-                    {
-                        var resolved = await _oracleService.FindPersonByCardAsync(ev.PersonCard);
-
-                        if (resolved is not null)
-                        {
-                            ev.PersonFirstName = resolved.FirstName;
-                            ev.PersonLastName = resolved.LastName;
-                            _localCache.UpdatePersonNameIfOffline(ev.Id, resolved.FirstName, resolved.LastName);
-                        }
-                    }
-                    catch
-                    {
-                        // nadal offline / nadal nierozpoznana - wyślij z tym co mamy
-                    }
-                }
-
-                var syntheticKey = new KeyItem
-                {
-                    Id = ev.KeyId,
-                    Name = ev.KeyName,
-                    Building = ev.KeyBuilding,
-                    CurrentRfidTagId = ev.RfidTagId
-                };
-
-                var syntheticPerson = new PersonResult
-                {
-                    CardNumber = ev.PersonCard,
-                    FirstName = ev.PersonFirstName,
-                    LastName = ev.PersonLastName
-                };
-
                 try
                 {
-                    var result = await _keyService.RegisterIssueOrReturnAsync(
-                        syntheticKey, syntheticPerson, ev.CreatedAt);
+                    var resolved = await _oracleService.FindPersonByCardAsync(ev.PersonCard);
 
-                    var expectedIssue = ev.Action == "ISSUE";
-                    var conflict = result.IsIssue != expectedIssue;
-
-                    _localCache.MarkSynced(ev.Id, conflict);
-
-                    SyncMessage?.Invoke(this,
-                        conflict
-                            ? $"Zsynchronizowano zdarzenie z ROZBIEŻNOŚCIĄ (klucz {ev.KeyName}) - sprawdź logi."
-                            : $"Zsynchronizowano zaległe zdarzenie: {ev.KeyName}.");
-
-                    IsMariaDbOnline = true;
+                    if (resolved is not null)
+                    {
+                        ev.PersonFirstName = resolved.FirstName;
+                        ev.PersonLastName = resolved.LastName;
+                        _localCache.UpdatePersonNameIfOffline(ev.Id, resolved.FirstName, resolved.LastName);
+                    }
                 }
-                catch (Exception ex)
+                catch
                 {
-                    _localCache.MarkFailedAttempt(ev.Id, ex.Message);
-                    IsMariaDbOnline = false;
-                    break; // zachowaj kolejność - reszta poczeka do następnej próby
+                    // nadal offline / nadal nierozpoznana - wyślij z tym co mamy
                 }
             }
 
-            PendingEventsCount = _localCache.CountUnsyncedEvents();
-            StateChanged?.Invoke(this, EventArgs.Empty);
+            var syntheticKey = new KeyItem
+            {
+                Id = ev.KeyId,
+                Name = ev.KeyName,
+                Building = ev.KeyBuilding,
+                CurrentRfidTagId = ev.RfidTagId
+            };
+
+            var syntheticPerson = new PersonResult
+            {
+                CardNumber = ev.PersonCard,
+                FirstName = ev.PersonFirstName,
+                LastName = ev.PersonLastName
+            };
+
+            try
+            {
+                var result = await _keyService.RegisterIssueOrReturnAsync(
+                    syntheticKey, syntheticPerson, ev.CreatedAt);
+
+                var expectedIssue = ev.Action == "ISSUE";
+                var conflict = result.IsIssue != expectedIssue;
+
+                _localCache.MarkSynced(ev.Id, conflict);
+
+                SyncMessage?.Invoke(this,
+                    conflict
+                        ? $"Zsynchronizowano zdarzenie z ROZBIEŻNOŚCIĄ (klucz {ev.KeyName}) - sprawdź logi."
+                        : $"Zsynchronizowano zaległe zdarzenie: {ev.KeyName}.");
+
+                IsMariaDbOnline = true;
+            }
+            catch (Exception ex)
+            {
+                _localCache.MarkFailedAttempt(ev.Id, ex.Message);
+                IsMariaDbOnline = false;
+                break; // zachowaj kolejność - reszta poczeka do następnej próby
+            }
         }
-        finally
-        {
-            _syncLock.Release();
-        }
+
+        PendingEventsCount = _localCache.CountUnsyncedEvents();
+        StateChanged?.Invoke(this, EventArgs.Empty);
     }
+    finally
+    {
+        _syncLock.Release();
+    }
+}
 
     public void Dispose()
     {

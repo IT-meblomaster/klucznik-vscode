@@ -1,20 +1,48 @@
-﻿namespace Klucznik.Models;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 
-public class KeyItem
+namespace Klucznik.Models;
+
+public partial class KeyItem : ObservableObject
 {
-    public uint Id { get; set; }
-    public string Name { get; set; } = string.Empty;
-    public uint BuildingId { get; set; }
-    public string? Building { get; set; }
-    public string? Hanger { get; set; }
-    public string? Description { get; set; }
-    public string? RfidTag { get; set; }
-    public uint? CurrentRfidTagId { get; set; }
-    public bool IsActive { get; set; }
-    public bool IsIssued { get; set; }
+    [ObservableProperty]
+    private uint id;
 
-    public string? IssuedToName { get; set; }
-    public DateTime? IssuedAt { get; set; }
+    [ObservableProperty]
+    private string name = string.Empty;
+
+    [ObservableProperty]
+    private uint buildingId;
+
+    [ObservableProperty]
+    private string? building;
+
+    [ObservableProperty]
+    private string? hanger;
+
+    [ObservableProperty]
+    private string? description;
+
+    [ObservableProperty]
+    private string? rfidTag;
+
+    [ObservableProperty]
+    private uint? currentRfidTagId;
+
+    [ObservableProperty]
+    private bool isActive;
+
+    [NotifyPropertyChangedFor(nameof(InventoryStatusText))]
+    [NotifyPropertyChangedFor(nameof(InventoryTooltip))]
+    [ObservableProperty]
+    private bool isIssued;
+
+    [NotifyPropertyChangedFor(nameof(InventoryTooltip))]
+    [ObservableProperty]
+    private string? issuedToName;
+
+    [NotifyPropertyChangedFor(nameof(InventoryTooltip))]
+    [ObservableProperty]
+    private DateTime? issuedAt;
 
     public string BuildingDisplay =>
         string.IsNullOrWhiteSpace(Building) ? "Bez budynku" : Building.Trim();
