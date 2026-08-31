@@ -1,6 +1,4 @@
-﻿
-using System.Threading;
-using System.Windows;
+﻿using System.Windows;
 using Klucznik.Services;
 
 namespace Klucznik;

@@ -1,7 +1,3 @@
-using System;
-using System.Threading;
-using System.Threading.Tasks;
-using System.Collections.Generic;
 using Klucznik.Models;
 
 namespace Klucznik.Services;
@@ -44,8 +40,6 @@ public class SyncCoordinator : IDisposable
             TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(20));
     }
 
-    // Wołane po każdym udanym RefreshKeysAsync() z MariaDB - odświeża lokalną
-    // kopię, żeby offline'owe skany kluczy miały aktualny stan.
     public void RefreshLocalCache(IEnumerable<KeyItem> keys)
     {
         _localCache.ReplaceKeysSnapshot(keys);

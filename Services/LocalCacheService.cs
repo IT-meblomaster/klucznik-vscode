@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.IO;
 using Klucznik.Models;
 using Microsoft.Data.Sqlite;

@@ -1,4 +1,4 @@
-﻿﻿using Klucznik.Models;
+﻿using Klucznik.Models;
 using Npgsql;
 
 namespace Klucznik.Services;

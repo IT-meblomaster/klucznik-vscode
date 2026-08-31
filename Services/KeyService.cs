@@ -11,7 +11,6 @@ public class KeyService
     {
         _connectionString = DatabaseConfig.Instance.MariaDbConnectionString;
     }
-
     public async Task<List<BuildingItem>> GetBuildingsAsync()
     {
         var result = new List<BuildingItem>();
