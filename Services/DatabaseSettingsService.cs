@@ -124,9 +124,9 @@ public class DatabaseSettingsService
         {
             SectionName = "PostgreSQL",
             ConfigKey = "PostgreSql",
-            Address = builder.Host,
+            Address = builder.Host ?? string.Empty,
             Port = builder.Port,
-            User = builder.Username,
+            User = builder.Username ?? string.Empty,
             Password = builder.Password ?? string.Empty,
             DatabaseName = builder.Database ?? string.Empty,
             IsEditing = false

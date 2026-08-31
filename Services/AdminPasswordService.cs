@@ -17,8 +17,7 @@ public class AdminPasswordService
 
     public AdminPasswordService()
     {
-        var config = new DatabaseConfig();
-        _connectionString = config.MariaDbConnectionString;
+        _connectionString = DatabaseConfig.Instance.MariaDbConnectionString;
     }
 
     public bool HasPassword()

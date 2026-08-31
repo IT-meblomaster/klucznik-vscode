@@ -8,8 +8,7 @@ public class MariaDbTestService
 
     public MariaDbTestService()
     {
-        var config = new DatabaseConfig();
-        _connectionString = config.MariaDbConnectionString;
+        _connectionString = DatabaseConfig.Instance.MariaDbConnectionString;
     }
 
     public async Task<List<string>> GetTableNamesAsync()

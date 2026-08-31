@@ -9,8 +9,7 @@ public class KeyService
 
     public KeyService()
     {
-        var config = new DatabaseConfig();
-        _connectionString = config.MariaDbConnectionString;
+        _connectionString = DatabaseConfig.Instance.MariaDbConnectionString;
     }
 
     public async Task<List<BuildingItem>> GetBuildingsAsync()

@@ -13,8 +13,7 @@ public class ScannerFeedbackColorService
 
     public ScannerFeedbackColorService()
     {
-        var config = new DatabaseConfig();
-        _connectionString = config.MariaDbConnectionString;
+        _connectionString = DatabaseConfig.Instance.MariaDbConnectionString;
     }
 
     public ScannerFeedbackColorSettings Load()

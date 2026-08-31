@@ -4,10 +4,14 @@ namespace Klucznik.Services;
 
 public class DatabaseConfig
 {
+    private static readonly Lazy<DatabaseConfig> _instance = new(() => new DatabaseConfig());
+
+    public static DatabaseConfig Instance => _instance.Value;
+
     public string PostgreSqlConnectionString { get; }
     public string MariaDbConnectionString { get; }
 
-    public DatabaseConfig()
+    private DatabaseConfig()
     {
         var config = new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)

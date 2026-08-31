@@ -1,5 +1,4 @@
-﻿using Microsoft.Extensions.Configuration;
-using Klucznik.Models;
+﻿﻿using Klucznik.Models;
 using Npgsql;
 
 namespace Klucznik.Services;
@@ -10,14 +9,7 @@ public class OracleTestService
 
     public OracleTestService()
     {
-        var config = new ConfigurationBuilder()
-            .SetBasePath(AppContext.BaseDirectory)
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: false)
-            .Build();
-
-        _connectionString = config.GetConnectionString("PostgreSql")
-            ?? throw new InvalidOperationException(
-                "Brak ConnectionStrings:PostgreSql w appsettings.json");
+        _connectionString = DatabaseConfig.Instance.PostgreSqlConnectionString;
     }
 
     public async Task<PersonResult?> FindPersonByCardAsync(string cardNumber)
