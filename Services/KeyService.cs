@@ -590,98 +590,103 @@ public class KeyService
         return result as string;
     }
 
-    public async Task<KeyLoanOperationResult> RegisterIssueOrReturnAsync(KeyItem key, PersonResult person)
+    public async Task<KeyLoanOperationResult> RegisterIssueOrReturnAsync(
+    KeyItem key, PersonResult person, DateTime? eventTime = null)
+{
+    var eventTimestamp = eventTime ?? DateTime.Now;
+
+    await using var connection = new MySqlConnection(_connectionString);
+    await connection.OpenAsync();
+    await using var transaction = await connection.BeginTransactionAsync();
+
+    try
     {
-        await using var connection = new MySqlConnection(_connectionString);
-        await connection.OpenAsync();
-        await using var transaction = await connection.BeginTransactionAsync();
+        uint? activeRfidTagId = await GetActiveRfidTagIdInternalAsync(connection, (MySqlTransaction)transaction, key.Id);
 
-        try
+        const string openLoanSql = """
+            SELECT id, issued_to_name
+            FROM key_loans
+            WHERE key_id = @keyId
+              AND returned_at IS NULL
+            LIMIT 1
+            FOR UPDATE;
+            """;
+
+        await using var openLoanCommand = new MySqlCommand(openLoanSql, connection, (MySqlTransaction)transaction);
+        openLoanCommand.Parameters.AddWithValue("@keyId", key.Id);
+
+        await using var reader = await openLoanCommand.ExecuteReaderAsync();
+
+        ulong? openLoanId = null;
+        string? issuedToName = null;
+
+        if (await reader.ReadAsync())
         {
-            uint? activeRfidTagId = await GetActiveRfidTagIdInternalAsync(connection, (MySqlTransaction)transaction, key.Id);
+            openLoanId = reader.GetFieldValue<ulong>(0);
+            issuedToName = reader.IsDBNull(1) ? null : reader.GetString(1);
+        }
 
-            const string openLoanSql = """
-                SELECT id, issued_to_name
-                FROM key_loans
-                WHERE key_id = @keyId
-                  AND returned_at IS NULL
-                LIMIT 1
-                FOR UPDATE;
+        await reader.CloseAsync();
+
+        if (openLoanId is null)
+        {
+            const string insertLoanSql = """
+                INSERT INTO key_loans (key_id, rfid_tag_id, issued_to_card, issued_to_name, issued_at)
+                VALUES (@keyId, @rfidTagId, @issuedToCard, @issuedToName, @issuedAt);
                 """;
 
-            await using var openLoanCommand = new MySqlCommand(openLoanSql, connection, (MySqlTransaction)transaction);
-            openLoanCommand.Parameters.AddWithValue("@keyId", key.Id);
+            await using var insertLoanCommand = new MySqlCommand(insertLoanSql, connection, (MySqlTransaction)transaction);
+            insertLoanCommand.Parameters.AddWithValue("@keyId", key.Id);
+            insertLoanCommand.Parameters.AddWithValue("@rfidTagId", ToDbValue(activeRfidTagId));
+            insertLoanCommand.Parameters.AddWithValue("@issuedToCard", person.CardNumber);
+            insertLoanCommand.Parameters.AddWithValue("@issuedToName", $"{person.FirstName} {person.LastName}".Trim());
+            insertLoanCommand.Parameters.AddWithValue("@issuedAt", eventTimestamp);
 
-            await using var reader = await openLoanCommand.ExecuteReaderAsync();
+            await insertLoanCommand.ExecuteNonQueryAsync();
 
-            ulong? openLoanId = null;
-            string? issuedToName = null;
-
-            if (await reader.ReadAsync())
-            {
-                openLoanId = reader.GetFieldValue<ulong>(0);
-                issuedToName = reader.IsDBNull(1) ? null : reader.GetString(1);
-            }
-
-            await reader.CloseAsync();
-
-            if (openLoanId is null)
-            {
-                const string insertLoanSql = """
-                    INSERT INTO key_loans (key_id, rfid_tag_id, issued_to_card, issued_to_name, issued_at)
-                    VALUES (@keyId, @rfidTagId, @issuedToCard, @issuedToName, NOW());
-                    """;
-
-                await using var insertLoanCommand = new MySqlCommand(insertLoanSql, connection, (MySqlTransaction)transaction);
-                insertLoanCommand.Parameters.AddWithValue("@keyId", key.Id);
-                insertLoanCommand.Parameters.AddWithValue("@rfidTagId", ToDbValue(activeRfidTagId));
-                insertLoanCommand.Parameters.AddWithValue("@issuedToCard", person.CardNumber);
-                insertLoanCommand.Parameters.AddWithValue("@issuedToName", $"{person.FirstName} {person.LastName}".Trim());
-
-                await insertLoanCommand.ExecuteNonQueryAsync();
-
-                await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "ISSUE", $"Wydano klucz {key.KeyWithBuildingDisplay} osobie {person.FirstName} {person.LastName}".Trim());
-
-                await transaction.CommitAsync();
-
-                return new KeyLoanOperationResult
-                {
-                    IsIssue = true,
-                    Message = $"Wydano klucz: {key.KeyWithBuildingDisplay} -> {person.FirstName} {person.LastName}".Trim()
-                };
-            }
-
-            const string returnLoanSql = """
-                UPDATE key_loans
-                SET returned_by_card = @returnedByCard,
-                    returned_by_name = @returnedByName,
-                    returned_at = NOW()
-                WHERE id = @loanId;
-                """;
-
-            await using var returnLoanCommand = new MySqlCommand(returnLoanSql, connection, (MySqlTransaction)transaction);
-            returnLoanCommand.Parameters.AddWithValue("@loanId", openLoanId.Value);
-            returnLoanCommand.Parameters.AddWithValue("@returnedByCard", person.CardNumber);
-            returnLoanCommand.Parameters.AddWithValue("@returnedByName", $"{person.FirstName} {person.LastName}".Trim());
-
-            await returnLoanCommand.ExecuteNonQueryAsync();
-
-            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"Zwrócono klucz {key.KeyWithBuildingDisplay}. Wydał: {issuedToName ?? "nieznany"}, zwrócił: {person.FirstName} {person.LastName}".Trim());
+            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "ISSUE", $"Wydano klucz {key.KeyWithBuildingDisplay} osobie {person.FirstName} {person.LastName}".Trim());
 
             await transaction.CommitAsync();
 
             return new KeyLoanOperationResult
             {
-                IsReturn = true,
-                Message = $"Zwrócono klucz: {key.KeyWithBuildingDisplay} <- {person.FirstName} {person.LastName}".Trim()
+                IsIssue = true,
+                Message = $"Wydano klucz: {key.KeyWithBuildingDisplay} -> {person.FirstName} {person.LastName}".Trim()
             };
         }
-        catch
+
+        const string returnLoanSql = """
+            UPDATE key_loans
+            SET returned_by_card = @returnedByCard,
+                returned_by_name = @returnedByName,
+                returned_at = @returnedAt
+            WHERE id = @loanId;
+            """;
+
+        await using var returnLoanCommand = new MySqlCommand(returnLoanSql, connection, (MySqlTransaction)transaction);
+        returnLoanCommand.Parameters.AddWithValue("@loanId", openLoanId.Value);
+        returnLoanCommand.Parameters.AddWithValue("@returnedByCard", person.CardNumber);
+        returnLoanCommand.Parameters.AddWithValue("@returnedByName", $"{person.FirstName} {person.LastName}".Trim());
+        returnLoanCommand.Parameters.AddWithValue("@returnedAt", eventTimestamp);
+
+        await returnLoanCommand.ExecuteNonQueryAsync();
+
+        await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"Zwrócono klucz {key.KeyWithBuildingDisplay}. Wydał: {issuedToName ?? "nieznany"}, zwrócił: {person.FirstName} {person.LastName}".Trim());
+
+        await transaction.CommitAsync();
+
+        return new KeyLoanOperationResult
         {
-            await transaction.RollbackAsync();
-            throw;
-        }
+            IsReturn = true,
+            Message = $"Zwrócono klucz: {key.KeyWithBuildingDisplay} <- {person.FirstName} {person.LastName}".Trim()
+        };
     }
+    catch
+    {
+        await transaction.RollbackAsync();
+        throw;
+    }
+}
 
     private static KeyItem ReadKeyItem(MySqlDataReader reader)
     {

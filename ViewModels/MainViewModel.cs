@@ -15,7 +15,8 @@ public partial class MainViewModel : ObservableObject
 
     private static readonly TimeSpan ScanWindow = TimeSpan.FromSeconds(10);
     private static readonly TimeSpan SuccessDisplayWindow = TimeSpan.FromSeconds(5);
-
+    private readonly LocalCacheService _localCache = new();
+    private readonly SyncCoordinator _syncCoordinator;
     private readonly OracleTestService _oracleService = new();
     private readonly KeyService _keyService = new();
     private readonly DatabaseSettingsService _databaseSettingsService = new();
@@ -51,6 +52,14 @@ public partial class MainViewModel : ObservableObject
         SelectedReportUser = AllUsersOption;
         SelectedReportKey = AllKeysOption;
         SelectedReportBuilding = AllBuildingsOption;
+
+_syncCoordinator = new SyncCoordinator(_oracleService, _keyService, _localCache);
+_syncCoordinator.StateChanged += (_, _) =>
+    Application.Current.Dispatcher.Invoke(RefreshConnectivityDisplay);
+_syncCoordinator.SyncMessage += (_, msg) =>
+    Application.Current.Dispatcher.Invoke(() => AddScannerLog(msg));
+RefreshConnectivityDisplay();
+        
     }
     partial void OnSelectedBuildingChanged(BuildingItem? value)
     {
@@ -143,6 +152,30 @@ public partial class MainViewModel : ObservableObject
 
     [ObservableProperty]
     private string reportStatus = "Gotowe.";
+
+
+[ObservableProperty]
+private int pendingSyncCount;
+
+[ObservableProperty]
+private string connectivityStatus = "Online";
+
+[ObservableProperty]
+private bool isSystemOnline = true;
+
+private void RefreshConnectivityDisplay()
+{
+    PendingSyncCount = _syncCoordinator.PendingEventsCount;
+    IsSystemOnline = _syncCoordinator.IsMariaDbOnline && _syncCoordinator.IsPostgreSqlOnline;
+
+    ConnectivityStatus = (_syncCoordinator.IsMariaDbOnline, _syncCoordinator.IsPostgreSqlOnline) switch
+    {
+        (true, true) => "Online",
+        (false, _) => $"Baza kluczy offline - {PendingSyncCount} zdarzeń w kolejce",
+        (_, false) => "Baza pracowników offline"
+    };
+}
+
 
     public string AdminPasswordHeader => AdminPasswordExists
         ? "Hasło administratora - zmiana"
@@ -425,8 +458,11 @@ public partial class MainViewModel : ObservableObject
         if (_firstScanAt.HasValue && DateTime.Now - _firstScanAt.Value > ScanWindow)
             ClearScannerState("Przekroczono 10 sekund. Wyczyściłem dane.");
 
-        var person = await _oracleService.FindPersonByCardAsync(code);
-        var key = await _keyService.GetKeyByRfidAsync(code);
+var resolution = await _syncCoordinator.ResolveScanAsync(code);
+var person = resolution.Person;
+var key = resolution.Key;
+RefreshConnectivityDisplay();
+
 
 if (person is null && key is null)
 {
@@ -499,7 +535,8 @@ if (person is null && key is null)
 
             try
             {
-                var result = await _keyService.RegisterIssueOrReturnAsync(_pendingKey, _pendingPerson);
+                var result = await _syncCoordinator.RegisterAsync(_pendingKey, _pendingPerson);
+                RefreshConnectivityDisplay();
 
                 AddScannerLog(result.Message);
                 Status = result.Message;
@@ -529,6 +566,7 @@ if (person is null && key is null)
             InventoryGroups.Clear();
 
             var items = await _keyService.GetKeysAsync();
+            _syncCoordinator.RefreshLocalCache(items);
 
             foreach (var item in items)
                 Keys.Add(item);
