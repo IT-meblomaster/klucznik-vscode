@@ -3,6 +3,8 @@ namespace Klucznik.Models;
 
 public class PendingKeyEvent
 {
+    public DateTime? PolicySyncedAtUtc { get; set; }
+    public bool WasRestricted { get; set; }
     public Guid Id { get; set; } = Guid.NewGuid();
     public uint KeyId { get; set; }
     public string KeyName { get; set; } = string.Empty;

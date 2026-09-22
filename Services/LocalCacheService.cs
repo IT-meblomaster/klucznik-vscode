@@ -65,6 +65,85 @@ public class LocalCacheService
 
         using var command = new SqliteCommand(sql, connection);
         command.ExecuteNonQuery();
+        // Migracja istniejącej lokalnej bazy jest wykonywana automatycznie.
+        var columns = new HashSet<string>();
+        using (var info = new SqliteCommand("PRAGMA table_info(pending_events);", connection))
+        using (var reader = info.ExecuteReader())
+            while (reader.Read()) columns.Add(reader.GetString(1));
+        foreach (var column in new[] { "policy_synced_at TEXT", "was_restricted INTEGER NOT NULL DEFAULT 0" })
+            if (!columns.Contains(column.Split(' ')[0]))
+            {
+                using var alter = new SqliteCommand("ALTER TABLE pending_events ADD COLUMN " + column, connection);
+                alter.ExecuteNonQuery();
+            }
+        using var policySchema = new SqliteCommand("""
+            CREATE TABLE IF NOT EXISTS access_policy_cache (
+                key_id INTEGER PRIMARY KEY, is_restricted INTEGER NOT NULL);
+            CREATE TABLE IF NOT EXISTS access_card_cache (
+                key_id INTEGER NOT NULL, card_number TEXT NOT NULL,
+                PRIMARY KEY(key_id, card_number));
+            CREATE TABLE IF NOT EXISTS access_cache_info (
+                id INTEGER PRIMARY KEY CHECK(id=1), synced_at TEXT NOT NULL);
+            """, connection);
+        policySchema.ExecuteNonQuery();
+    }
+
+    public void ReplaceAccessSnapshot(KeyAccessSnapshot snapshot)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var transaction = connection.BeginTransaction();
+        using (var clear = new SqliteCommand("DELETE FROM access_policy_cache; DELETE FROM access_card_cache;", connection, transaction))
+            clear.ExecuteNonQuery();
+        foreach (var policy in snapshot.Policies)
+        {
+            using var insert = new SqliteCommand("INSERT INTO access_policy_cache VALUES (@key,@restricted);", connection, transaction);
+            insert.Parameters.AddWithValue("@key", policy.KeyId);
+            insert.Parameters.AddWithValue("@restricted", policy.IsRestricted ? 1 : 0);
+            insert.ExecuteNonQuery();
+            foreach (var card in policy.Cards)
+            {
+                using var add = new SqliteCommand("INSERT INTO access_card_cache VALUES (@key,@card);", connection, transaction);
+                add.Parameters.AddWithValue("@key", policy.KeyId);
+                add.Parameters.AddWithValue("@card", card);
+                add.ExecuteNonQuery();
+            }
+        }
+        using var stamp = new SqliteCommand("INSERT OR REPLACE INTO access_cache_info VALUES (1,@at);", connection, transaction);
+        stamp.Parameters.AddWithValue("@at", snapshot.SyncedAtUtc.ToString("o"));
+        stamp.ExecuteNonQuery();
+        transaction.Commit();
+    }
+
+    public (bool Restricted, DateTime SyncedAtUtc) CheckOfflineIssue(uint keyId, string card)
+    {
+        var normalized = CardNumber.Normalize(card);
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var command = new SqliteCommand("""
+            SELECT p.is_restricted, i.synced_at,
+              EXISTS(SELECT 1 FROM access_card_cache c WHERE c.key_id=p.key_id AND c.card_number=@card)
+            FROM access_policy_cache p CROSS JOIN access_cache_info i
+            WHERE p.key_id=@key AND i.id=1;
+            """, connection);
+        command.Parameters.AddWithValue("@key", keyId);
+        command.Parameters.AddWithValue("@card", normalized);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read())
+            throw new KeyAccessDeniedException("Brak lokalnej kopii uprawnień dla tego klucza. Wymagane połączenie z bazą.");
+        bool restricted = reader.GetInt64(0) == 1;
+        if (restricted && reader.GetInt64(2) == 0)
+            throw new KeyAccessDeniedException("Brak uprawnienia do pobrania klucza (lokalna kopia uprawnień).");
+        return (restricted, DateTime.Parse(reader.GetString(1), null, System.Globalization.DateTimeStyles.RoundtripKind));
+    }
+
+    public DateTime? GetAccessSnapshotTime()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var command = new SqliteCommand("SELECT synced_at FROM access_cache_info WHERE id=1;", connection);
+        var value = command.ExecuteScalar() as string;
+        return value is null ? null : DateTime.Parse(value, null, System.Globalization.DateTimeStyles.RoundtripKind);
     }
 
     // ---- Cache kluczy (do offline'owego GetKeyByRfid) ----------------
@@ -107,6 +186,13 @@ public class LocalCacheService
             insert.ExecuteNonQuery();
         }
 
+        using (var overlay = new SqliteCommand("""
+            UPDATE key_cache SET
+              is_issued = (SELECT action='ISSUE' FROM pending_events p WHERE p.key_id=key_cache.id AND synced=0 ORDER BY created_at DESC, rowid DESC LIMIT 1),
+              issued_to_name = (SELECT CASE WHEN action='ISSUE' THEN TRIM(person_first_name || ' ' || person_last_name) ELSE NULL END FROM pending_events p WHERE p.key_id=key_cache.id AND synced=0 ORDER BY created_at DESC, rowid DESC LIMIT 1),
+              issued_at = (SELECT CASE WHEN action='ISSUE' THEN created_at ELSE NULL END FROM pending_events p WHERE p.key_id=key_cache.id AND synced=0 ORDER BY created_at DESC, rowid DESC LIMIT 1)
+            WHERE EXISTS(SELECT 1 FROM pending_events p WHERE p.key_id=key_cache.id AND synced=0);
+            """, connection, transaction)) overlay.ExecuteNonQuery();
         transaction.Commit();
     }
 
@@ -178,18 +264,20 @@ public class LocalCacheService
         using var connection = new SqliteConnection(_connectionString);
         connection.Open();
 
+        using var transaction = connection.BeginTransaction();
+
         const string sql = """
             INSERT INTO pending_events
                 (id, key_id, key_name, key_building, rfid_tag_id, action,
                  person_card, person_first_name, person_last_name, person_offline,
-                 created_at, synced, sync_conflict, retry_count)
+                 created_at, synced, sync_conflict, retry_count, policy_synced_at, was_restricted)
             VALUES
                 (@id, @keyId, @keyName, @keyBuilding, @rfidTagId, @action,
                  @personCard, @personFirstName, @personLastName, @personOffline,
-                 @createdAt, 0, 0, 0);
+                 @createdAt, 0, 0, 0, @policyAt, @restricted);
             """;
 
-        using var command = new SqliteCommand(sql, connection);
+        using var command = new SqliteCommand(sql, connection, transaction);
         command.Parameters.AddWithValue("@id", ev.Id.ToString());
         command.Parameters.AddWithValue("@keyId", ev.KeyId);
         command.Parameters.AddWithValue("@keyName", ev.KeyName);
@@ -201,7 +289,16 @@ public class LocalCacheService
         command.Parameters.AddWithValue("@personLastName", ev.PersonLastName);
         command.Parameters.AddWithValue("@personOffline", ev.PersonOffline ? 1 : 0);
         command.Parameters.AddWithValue("@createdAt", ev.CreatedAt.ToString("o"));
+        command.Parameters.AddWithValue("@policyAt", (object?)ev.PolicySyncedAtUtc?.ToString("o") ?? DBNull.Value);
+        command.Parameters.AddWithValue("@restricted", ev.WasRestricted ? 1 : 0);
         command.ExecuteNonQuery();
+        using var state = new SqliteCommand("UPDATE key_cache SET is_issued=@issued, issued_to_name=@name, issued_at=@at WHERE id=@key;", connection, transaction);
+        state.Parameters.AddWithValue("@key", ev.KeyId);
+        state.Parameters.AddWithValue("@issued", ev.Action == "ISSUE" ? 1 : 0);
+        state.Parameters.AddWithValue("@name", ev.Action == "ISSUE" ? $"{ev.PersonFirstName} {ev.PersonLastName}".Trim() : (object)DBNull.Value);
+        state.Parameters.AddWithValue("@at", ev.Action == "ISSUE" ? ev.CreatedAt.ToString("o") : (object)DBNull.Value);
+        state.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     public List<PendingKeyEvent> GetUnsyncedEvents()
@@ -212,10 +309,10 @@ public class LocalCacheService
         const string sql = """
             SELECT id, key_id, key_name, key_building, rfid_tag_id, action,
                    person_card, person_first_name, person_last_name, person_offline,
-                   created_at, retry_count, sync_conflict
+                   created_at, retry_count, sync_conflict, policy_synced_at, was_restricted
             FROM pending_events
             WHERE synced = 0
-            ORDER BY created_at;
+            ORDER BY created_at, rowid;
             """;
 
         using var command = new SqliteCommand(sql, connection);
@@ -239,7 +336,9 @@ public class LocalCacheService
                 PersonOffline = reader.GetInt64(9) == 1,
                 CreatedAt = DateTime.Parse(reader.GetString(10)),
                 RetryCount = (int)reader.GetInt64(11),
-                SyncConflict = reader.GetInt64(12) == 1
+                SyncConflict = reader.GetInt64(12) == 1,
+                PolicySyncedAtUtc = reader.IsDBNull(13) ? null : DateTime.Parse(reader.GetString(13), null, System.Globalization.DateTimeStyles.RoundtripKind),
+                WasRestricted = reader.GetInt64(14) == 1
             });
         }
 
@@ -255,6 +354,16 @@ public class LocalCacheService
             "SELECT COUNT(*) FROM pending_events WHERE synced = 0;", connection);
 
         return Convert.ToInt32(command.ExecuteScalar());
+    }
+
+    public void MarkDependentConflicts(uint keyId)
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        using var command = new SqliteCommand(
+            "UPDATE pending_events SET sync_conflict=1 WHERE key_id=@key AND synced=0;", connection);
+        command.Parameters.AddWithValue("@key", keyId);
+        command.ExecuteNonQuery();
     }
 
     public void MarkSynced(Guid id, bool conflict = false)

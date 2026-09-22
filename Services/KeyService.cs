@@ -1,4 +1,4 @@
-﻿using Klucznik.Models;
+using Klucznik.Models;
 using MySqlConnector;
 
 namespace Klucznik.Services;
@@ -588,103 +588,173 @@ public class KeyService
         return result as string;
     }
 
-    public async Task<KeyLoanOperationResult> RegisterIssueOrReturnAsync(
-    KeyItem key, PersonResult person, DateTime? eventTime = null)
-{
-    var eventTimestamp = eventTime ?? DateTime.Now;
-
-    await using var connection = new MySqlConnection(_connectionString);
-    await connection.OpenAsync();
-    await using var transaction = await connection.BeginTransactionAsync();
-
-    try
+    public async Task<KeyAccessSnapshot> GetAccessSnapshotAsync()
     {
-        uint? activeRfidTagId = await GetActiveRfidTagIdInternalAsync(connection, (MySqlTransaction)transaction, key.Id);
-
-        const string openLoanSql = """
-            SELECT id, issued_to_name
-            FROM key_loans
-            WHERE key_id = @keyId
-              AND returned_at IS NULL
-            LIMIT 1
-            FOR UPDATE;
-            """;
-
-        await using var openLoanCommand = new MySqlCommand(openLoanSql, connection, (MySqlTransaction)transaction);
-        openLoanCommand.Parameters.AddWithValue("@keyId", key.Id);
-
-        await using var reader = await openLoanCommand.ExecuteReaderAsync();
-
-        ulong? openLoanId = null;
-        string? issuedToName = null;
-
-        if (await reader.ReadAsync())
+        await using var connection = new MySqlConnection(_connectionString);
+        await connection.OpenAsync();
+        // Jedno zapytanie = spójny obraz flag i list kart.
+        await using var command = new MySqlCommand("""
+            SELECT k.id, k.is_restricted, c.card_number
+            FROM `keys` k LEFT JOIN key_authorized_cards c ON c.key_id=k.id
+            WHERE k.is_active=1 ORDER BY k.id, c.card_number;
+            """, connection);
+        await using var reader = await command.ExecuteReaderAsync();
+        var snapshot = new KeyAccessSnapshot();
+        KeyAccessPolicy? policy = null;
+        while (await reader.ReadAsync())
         {
-            openLoanId = reader.GetFieldValue<ulong>(0);
-            issuedToName = reader.IsDBNull(1) ? null : reader.GetString(1);
-        }
-
-        await reader.CloseAsync();
-
-        if (openLoanId is null)
-        {
-            const string insertLoanSql = """
-                INSERT INTO key_loans (key_id, rfid_tag_id, issued_to_card, issued_to_name, issued_at)
-                VALUES (@keyId, @rfidTagId, @issuedToCard, @issuedToName, @issuedAt);
-                """;
-
-            await using var insertLoanCommand = new MySqlCommand(insertLoanSql, connection, (MySqlTransaction)transaction);
-            insertLoanCommand.Parameters.AddWithValue("@keyId", key.Id);
-            insertLoanCommand.Parameters.AddWithValue("@rfidTagId", ToDbValue(activeRfidTagId));
-            insertLoanCommand.Parameters.AddWithValue("@issuedToCard", person.CardNumber);
-            insertLoanCommand.Parameters.AddWithValue("@issuedToName", $"{person.FirstName} {person.LastName}".Trim());
-            insertLoanCommand.Parameters.AddWithValue("@issuedAt", eventTimestamp);
-
-            await insertLoanCommand.ExecuteNonQueryAsync();
-
-            await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "ISSUE", $"Wydano klucz {key.KeyWithBuildingDisplay} osobie {person.FirstName} {person.LastName}".Trim());
-
-            await transaction.CommitAsync();
-
-            return new KeyLoanOperationResult
+            var id = reader.GetFieldValue<uint>(0);
+            if (policy is null || policy.KeyId != id)
             {
-                IsIssue = true,
-                Message = $"Wydano klucz: {key.KeyWithBuildingDisplay} -> {person.FirstName} {person.LastName}".Trim()
-            };
+                policy = new KeyAccessPolicy { KeyId = id, IsRestricted = reader.GetBoolean(1) };
+                snapshot.Policies.Add(policy);
+            }
+            if (!reader.IsDBNull(2)) policy.Cards.Add(CardNumber.Normalize(reader.GetString(2)));
+        }
+        return snapshot;
+    }
+
+    public async Task<KeyLoanOperationResult> RegisterIssueOrReturnAsync(
+        KeyItem key, PersonResult person, Guid eventId, bool expectedIssue,
+        DateTime eventTime, bool replay = false, DateTime? offlinePolicyAt = null,
+        bool offlineRestricted = false, bool dependentConflict = false)
+    {
+        await using var connection = new MySqlConnection(_connectionString);
+        await connection.OpenAsync();
+        await using var transaction = await connection.BeginTransactionAsync();
+        // Blokada istniejącego klucza serializuje wydania również przy pustym key_loans.
+        await using var keyCommand = new MySqlCommand(
+            "SELECT is_restricted, is_active FROM `keys` WHERE id=@key FOR UPDATE;", connection, transaction);
+        keyCommand.Parameters.AddWithValue("@key", key.Id);
+        bool restricted, active;
+        await using (var reader = await keyCommand.ExecuteReaderAsync())
+        {
+            if (!await reader.ReadAsync()) throw new KeyAccessDeniedException("Klucz nie istnieje.");
+            restricted = reader.GetBoolean(0);
+            active = reader.GetBoolean(1);
         }
 
-        const string returnLoanSql = """
-            UPDATE key_loans
-            SET returned_by_card = @returnedByCard,
-                returned_by_name = @returnedByName,
-                returned_at = @returnedAt
-            WHERE id = @loanId;
-            """;
+        // Ponowienie po zerwanym połączeniu/niepewnym COMMIT nie powiela operacji.
+        await using var previous = new MySqlCommand(
+            "SELECT action, is_restricted, has_conflict, message FROM key_client_events WHERE event_id=@id;", connection, transaction);
+        previous.Parameters.AddWithValue("@id", eventId.ToString());
+        await using (var reader = await previous.ExecuteReaderAsync())
+            if (await reader.ReadAsync())
+                return new KeyLoanOperationResult {
+                    IsIssue = !reader.GetBoolean(2) && reader.GetString(0) == "ISSUE",
+                    IsReturn = !reader.GetBoolean(2) && reader.GetString(0) == "RETURN",
+                    IsRestricted = reader.GetBoolean(1), HasConflict = reader.GetBoolean(2),
+                    Message = reader.GetString(3)
+                };
 
-        await using var returnLoanCommand = new MySqlCommand(returnLoanSql, connection, (MySqlTransaction)transaction);
-        returnLoanCommand.Parameters.AddWithValue("@loanId", openLoanId.Value);
-        returnLoanCommand.Parameters.AddWithValue("@returnedByCard", person.CardNumber);
-        returnLoanCommand.Parameters.AddWithValue("@returnedByName", $"{person.FirstName} {person.LastName}".Trim());
-        returnLoanCommand.Parameters.AddWithValue("@returnedAt", eventTimestamp);
+        ulong? loanId = null;
+        string? issuedName = null;
+        DateTime? issuedAt = null;
+        await using var open = new MySqlCommand("""
+            SELECT id, issued_to_name, issued_at FROM key_loans
+            WHERE key_id=@key AND returned_at IS NULL LIMIT 1 FOR UPDATE;
+            """, connection, transaction);
+        open.Parameters.AddWithValue("@key", key.Id);
+        await using (var reader = await open.ExecuteReaderAsync())
+            if (await reader.ReadAsync())
+            {
+                loanId = reader.GetFieldValue<ulong>(0);
+                issuedName = reader.GetString(1);
+                issuedAt = reader.GetDateTime(2);
+            }
 
-        await returnLoanCommand.ExecuteNonQueryAsync();
+        string? conflict = null;
+        if (expectedIssue && loanId.HasValue) conflict = "Klucz ma już otwarte wypożyczenie.";
+        if (!expectedIssue && !loanId.HasValue) conflict = "Klucz nie ma otwartego wypożyczenia.";
+        if (!expectedIssue && issuedAt.HasValue && eventTime < issuedAt.Value)
+            conflict = "Zwrot jest starszy niż aktualne wypożyczenie.";
+        if (expectedIssue && !active) conflict = "Klucz jest nieaktywny.";
+        if (dependentConflict) conflict = "Wcześniejsze zaległe zdarzenie tego klucza ma konflikt; wymagana kontrola historii.";
+        if (conflict is not null && !replay)
+            throw new KeyAccessDeniedException(conflict + " Zeskanuj klucz ponownie.");
 
-        await InsertLogAsync(connection, (MySqlTransaction)transaction, key.Id, activeRfidTagId, "RETURN", $"Zwrócono klucz {key.KeyWithBuildingDisplay}. Wydał: {issuedToName ?? "nieznany"}, zwrócił: {person.FirstName} {person.LastName}".Trim());
-
-        await transaction.CommitAsync();
-
-        return new KeyLoanOperationResult
+        // Zaległe zdarzenie jest faktem historycznym: zapisujemy decyzję podjętą
+        // według lokalnej kopii, a nie udzielamy nowej zgody według dzisiejszej listy.
+        // Stare zdarzenia bez tej informacji są sprawdzane według bieżącej bazy.
+        bool useOfflineDecision = replay && offlinePolicyAt.HasValue;
+        bool eventRestricted = useOfflineDecision ? offlineRestricted : restricted;
+        if (expectedIssue && restricted && !useOfflineDecision && conflict is null)
         {
-            IsReturn = true,
-            Message = $"Zwrócono klucz: {key.KeyWithBuildingDisplay} <- {person.FirstName} {person.LastName}".Trim()
+            var card = CardNumber.Normalize(person.CardNumber);
+            await using var permission = new MySqlCommand("""
+                SELECT card_number FROM key_authorized_cards WHERE key_id=@key;
+                """, connection, transaction);
+            permission.Parameters.AddWithValue("@key", key.Id);
+            bool allowed = false;
+            await using (var reader = await permission.ExecuteReaderAsync())
+                while (await reader.ReadAsync())
+                    allowed |= CardNumber.Normalize(reader.GetString(0)) == card;
+            if (!allowed)
+            {
+                if (!replay) throw new KeyAccessDeniedException("Brak uprawnienia do pobrania tego klucza.");
+                conflict = "Zdarzenie sprzed aktualizacji: brak potwierdzonego uprawnienia.";
+            }
+        }
+
+        var rfidId = await GetActiveRfidTagIdInternalAsync(connection, transaction, key.Id);
+        string name = $"{person.FirstName} {person.LastName}".Trim();
+        string message;
+        if (conflict is not null)
+            message = $"KONFLIKT synchronizacji: {key.KeyWithBuildingDisplay}, karta {person.CardNumber}: {conflict}";
+        else if (expectedIssue)
+        {
+            await using var issue = new MySqlCommand("""
+                INSERT INTO key_loans(key_id,rfid_tag_id,issued_to_card,issued_to_name,issued_at)
+                VALUES(@key,@rfid,@card,@name,@at);
+                """, connection, transaction);
+            issue.Parameters.AddWithValue("@key", key.Id);
+            issue.Parameters.AddWithValue("@rfid", ToDbValue(rfidId));
+            issue.Parameters.AddWithValue("@card", person.CardNumber);
+            issue.Parameters.AddWithValue("@name", name);
+            issue.Parameters.AddWithValue("@at", eventTime);
+            await issue.ExecuteNonQueryAsync();
+            message = $"Wydano klucz: {key.KeyWithBuildingDisplay} -> {name}";
+        }
+        else
+        {
+            await using var returned = new MySqlCommand("""
+                UPDATE key_loans SET returned_by_card=@card, returned_by_name=@name,
+                    returned_at=@at WHERE id=@id;
+                """, connection, transaction);
+            returned.Parameters.AddWithValue("@card", person.CardNumber);
+            returned.Parameters.AddWithValue("@name", name);
+            returned.Parameters.AddWithValue("@at", eventTime);
+            returned.Parameters.AddWithValue("@id", loanId!.Value);
+            await returned.ExecuteNonQueryAsync();
+            message = $"Zwrócono klucz: {key.KeyWithBuildingDisplay} <- {name} (pobrał: {issuedName})";
+        }
+        if (expectedIssue && eventRestricted) message += " [klucz specjalny]";
+        var details = message + (replay ? $" [offline; zdarzenie: {eventTime:yyyy-MM-dd HH:mm:ss}; kopia uprawnień UTC: {offlinePolicyAt:O}]" : "");
+        await InsertLogAsync(connection, transaction, key.Id, rfidId,
+            conflict is not null ? "SYNC_CONFLICT" : expectedIssue ? "ISSUE" : "RETURN",
+            details.Length <= 1000 ? details : details[..1000]);
+        await using var receipt = new MySqlCommand("""
+            INSERT INTO key_client_events(event_id,key_id,action,card_number,event_at,is_offline,
+                policy_synced_at,is_restricted,has_conflict,message)
+            VALUES(@id,@key,@action,@card,@at,@offline,@policy,@restricted,@conflict,@message);
+            """, connection, transaction);
+        receipt.Parameters.AddWithValue("@id", eventId.ToString());
+        receipt.Parameters.AddWithValue("@key", key.Id);
+        receipt.Parameters.AddWithValue("@action", expectedIssue ? "ISSUE" : "RETURN");
+        receipt.Parameters.AddWithValue("@card", person.CardNumber);
+        receipt.Parameters.AddWithValue("@at", eventTime);
+        receipt.Parameters.AddWithValue("@offline", replay);
+        receipt.Parameters.AddWithValue("@policy", ToDbValue(offlinePolicyAt));
+        receipt.Parameters.AddWithValue("@restricted", eventRestricted);
+        receipt.Parameters.AddWithValue("@conflict", conflict is not null);
+        receipt.Parameters.AddWithValue("@message", message);
+        await receipt.ExecuteNonQueryAsync();
+        await transaction.CommitAsync();
+        return new KeyLoanOperationResult {
+            IsIssue = conflict is null && expectedIssue, IsReturn = conflict is null && !expectedIssue,
+            IsRestricted = eventRestricted, HasConflict = conflict is not null, Message = message
         };
     }
-    catch
-    {
-        await transaction.RollbackAsync();
-        throw;
-    }
-}
 
     private static KeyItem ReadKeyItem(MySqlDataReader reader)
     {

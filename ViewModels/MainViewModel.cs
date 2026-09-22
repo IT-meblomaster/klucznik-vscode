@@ -1,4 +1,4 @@
-﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Klucznik.Models;
 using Klucznik.Services;
@@ -174,6 +174,10 @@ private void RefreshConnectivityDisplay()
         (false, _) => $"Baza kluczy offline - {PendingSyncCount} zdarzeń w kolejce",
         (_, false) => "Baza pracowników offline"
     };
+    var policyAt = _syncCoordinator.AccessSnapshotTime;
+    ConnectivityStatus += policyAt.HasValue
+        ? $" | Kopia uprawnień: {policyAt.Value.ToLocalTime():yyyy-MM-dd HH:mm:ss}"
+        : " | Brak lokalnej kopii uprawnień";
 }
 
 
@@ -446,7 +450,22 @@ private void RefreshConnectivityDisplay()
         await ProcessScannerCodeAsync(scannedValue);
     }
 
+    private readonly SemaphoreSlim _scannerGate = new(1, 1);
+
     public async Task ProcessScannerCodeAsync(string scannedValue)
+    {
+        // Skan podczas zapisu nie może rozpocząć drugiej operacji na tej samej parze.
+        if (!await _scannerGate.WaitAsync(0)) return;
+        try { await ProcessScannerCodeCoreAsync(scannedValue); }
+        catch (Exception ex)
+        {
+            ClearScannerState($"Błąd skanowania: {ex.Message}");
+            AddScannerLog(Status);
+        }
+        finally { _scannerGate.Release(); }
+    }
+
+    private async Task ProcessScannerCodeCoreAsync(string scannedValue)
     {
         CancelSuccessDisplayClear();
 
@@ -538,6 +557,7 @@ if (person is null && key is null)
                 var result = await _syncCoordinator.RegisterAsync(_pendingKey, _pendingPerson);
                 RefreshConnectivityDisplay();
 
+                if (result.IsIssue && result.IsRestricted) KeySoundService.Play();
                 AddScannerLog(result.Message);
                 Status = result.Message;
 
@@ -550,9 +570,16 @@ if (person is null && key is null)
                 StartSuccessDisplayClear();
                 await LoadLoanReportsAsync();
             }
+            catch (KeyAccessDeniedException ex)
+            {
+                KeySoundService.Play(denied: true);
+                ClearScannerState($"Odmowa: {ex.Message}");
+                AddScannerLog(Status);
+            }
             catch (Exception ex)
             {
                 ClearScannerState($"Błąd operacji: {ex.Message}");
+                AddScannerLog(Status);
             }
         }
     }
